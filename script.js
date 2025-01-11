@@ -649,11 +649,19 @@ function updateShip() {
         ship.velocityX += Math.cos(adjustedAngle) * ship.thrust; // X-component of forward thrust
         ship.velocityY += Math.sin(adjustedAngle) * ship.thrust; // Y-component of forward thrust
     }
+ship.thrust = 0.05; // Increase thrust value (default was 0.05)
 
     // Apply friction to reduce velocity over time
     ship.velocityX *= ship.friction;
     ship.velocityY *= ship.friction;
 
+    // Cap maximum speed
+    const maxSpeed = 500;
+    const speed = Math.sqrt(ship.velocityX ** 2 + ship.velocityY ** 2);
+    if (speed > maxSpeed) {
+        ship.velocityX = (ship.velocityX / speed) * maxSpeed;
+        ship.velocityY = (ship.velocityY / speed) * maxSpeed;
+    }
     // Update ship's position
     ship.x += ship.velocityX;
     ship.y += ship.velocityY;

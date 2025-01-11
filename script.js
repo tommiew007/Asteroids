@@ -16,6 +16,9 @@ const asteroidSpeed = 1.5; // Base speed for asteroids
 
 // Array to store asteroids
 let asteroids = [];
+let scatterExplosions = []; // For scatter explosions
+let shipExplosion = [];     // For ship line explosion
+let asteroidExplosion = []; // For asteroid line explosion
 
 // Generate a random asteroid
 // Generate a random angular asteroid shape
@@ -38,6 +41,22 @@ function playSound(soundKey) {
 }
 
 
+function createScatterExplosion(x, y) {
+    const particles = [];
+    for (let i = 0; i < 20; i++) { // Create 20 small particles
+        const angle = Math.random() * Math.PI * 2; // Random direction
+        const speed = Math.random() * 3 + 1; // Random speed
+        particles.push({
+            x: x,
+            y: y,
+            dx: Math.cos(angle) * speed,
+            dy: Math.sin(angle) * speed,
+            life: Math.random() * 50 + 50, // Random lifespan
+            color: `hsl(${Math.random() * 360}, 100%, 50%)` // Vibrant color
+        });
+    }
+    return particles;
+}
 
 function createExplosion(x, y) {
     const particles = [];
@@ -79,12 +98,13 @@ function createLineExplosionFromShape(x, y, points) {
         const end = points[(i + 1) % points.length]; // Wrap around to first point
         const angle = Math.atan2(end.y - start.y, end.x - start.x);
         const speed = Math.random() * 3 + 2; // Random speed
+
         lines.push({
             x: x + start.x, // Offset by asteroid/ship position
             y: y + start.y,
             dx: Math.cos(angle) * speed,
             dy: Math.sin(angle) * speed,
-            life: Math.random() * 80 + 60, // Extended lifespan
+            life: Math.random() * 80 + 60, // Lifespan for smooth outward movement
             color: `hsl(${Math.random() * 360}, 100%, 50%)` // Random vibrant color
         });
     }
@@ -92,59 +112,68 @@ function createLineExplosionFromShape(x, y, points) {
 }
 
 
-let shipExplosion = []; // Store the ship's explosion lines
-let asteroidExplosion = []; // Store the asteroid's explosion lines
 
 function updateExplosions() {
-    // Update the lines in the explosion
+    const updateParticles = particles => {
+        for (let i = particles.length - 1; i >= 0; i--) {
+            const particle = particles[i];
+            particle.x += particle.dx;
+            particle.y += particle.dy;
+            particle.life--;
+            if (particle.life <= 0) {
+                particles.splice(i, 1); // Remove expired particles
+            }
+        }
+    };
+
     const updateLines = lines => {
         for (let i = lines.length - 1; i >= 0; i--) {
             const line = lines[i];
-            
-            // Update position
             line.x += line.dx;
             line.y += line.dy;
-
-            // Decrease lifespan
             line.life--;
-
-            // Remove line if its lifespan is over
             if (line.life <= 0) {
                 lines.splice(i, 1); // Remove expired lines
             }
         }
     };
 
-    // Update ship and asteroid explosions
+    // Update scatter explosions and line explosions
+    scatterExplosions.forEach(updateParticles);
     updateLines(shipExplosion);
     updateLines(asteroidExplosion);
 }
 
 function drawExplosions() {
-    // Draw ship explosion lines
+    scatterExplosions.forEach(particles => {
+        particles.forEach(particle => {
+            if (particle.life > 0) {
+                ctx.fillStyle = particle.color;
+                ctx.fillRect(particle.x, particle.y, 2, 2); // Draw small particle
+            }
+        });
+    });
+
     shipExplosion.forEach(line => {
         if (line.life > 0) {
             ctx.beginPath();
             ctx.moveTo(line.x, line.y);
-            ctx.lineTo(line.x + line.dx * 5, line.y + line.dy * 5); // Extend the line
+            ctx.lineTo(line.x + line.dx * 5, line.y + line.dy * 5);
             ctx.strokeStyle = line.color;
             ctx.stroke();
         }
     });
 
-    // Draw asteroid explosion lines
     asteroidExplosion.forEach(line => {
         if (line.life > 0) {
             ctx.beginPath();
             ctx.moveTo(line.x, line.y);
-            ctx.lineTo(line.x + line.dx * 5, line.y + line.dy * 5); // Extend the line
+            ctx.lineTo(line.x + line.dx * 5, line.y + line.dy * 5);
             ctx.strokeStyle = line.color;
             ctx.stroke();
         }
     });
 }
-
-
 
 function drawScore() {
     ctx.fillStyle = "white";
@@ -257,8 +286,8 @@ function checkLaserAsteroidCollision() {
 }
 function handleAsteroidHit(asteroid, laser) {
     const index = asteroids.indexOf(asteroid);
-	playSound('asteroidHit'); // Play asteroid explosion sound
     if (index > -1) asteroids.splice(index, 1); // Remove the impacted asteroid
+    playSound('asteroidHit'); // Play asteroid explosion sound
 
     // Award points based on asteroid size
     if (asteroid.size === 1) score += 10;
@@ -269,6 +298,7 @@ function handleAsteroidHit(asteroid, laser) {
     if (asteroid.size === 1) {
         // Size 1 asteroid splits into two size 2 asteroids
         const newAsteroids = [];
+		//scatterExplosions.push(createScatterExplosion(asteroid.x, asteroid.y));
         for (let i = 0; i < 2; i++) {
             const angleOffset = Math.PI / 4 * (i === 0 ? -1 : 1); // Two directions
             const angle = Math.atan2(laser.dy, laser.dx) + angleOffset;
@@ -284,30 +314,38 @@ function handleAsteroidHit(asteroid, laser) {
                 radius: asteroidSizes[size - 1] / 2, // Radius for size 2
                 points: generateAsteroidShape(asteroidSizes[size - 1] / 2),
                 rotation: Math.random() * 0.02 - 0.01,
-                angle: 0
+                angle: 0,
+                color: asteroid.color // Use the parent's color
             });
         }
         asteroids.push(...newAsteroids);
     } else if (asteroid.size === 2) {
-        // Size 2 asteroid splits into one size 3 asteroid
-        const angle = Math.atan2(laser.dy, laser.dx);
-        const speed = asteroidSpeed + Math.random(); // Slight speed variation
-        const size = 3;
+        // Size 2 asteroid splits into two size 3 asteroids
+        const newAsteroids = [];
+		//scatterExplosions.push(createScatterExplosion(asteroid.x, asteroid.y));
+        for (let i = 0; i < 2; i++) {
+            const angleOffset = Math.PI / 4 * (i === 0 ? -1 : 1); // Two directions
+            const angle = Math.atan2(laser.dy, laser.dx) + angleOffset;
+            const speed = asteroidSpeed + Math.random(); // Slight speed variation
+            const size = 3;
 
-        const newAsteroid = {
-            x: asteroid.x,
-            y: asteroid.y,
-            dx: Math.cos(angle) * speed,
-            dy: Math.sin(angle) * speed,
-            size: size,
-            radius: asteroidSizes[size - 1] / 2, // Radius for size 3
-            points: generateAsteroidShape(asteroidSizes[size - 1] / 2),
-            rotation: Math.random() * 0.02 - 0.01,
-            angle: 0
-        };
-        asteroids.push(newAsteroid);
+            newAsteroids.push({
+                x: asteroid.x,
+                y: asteroid.y,
+                dx: Math.cos(angle) * speed,
+                dy: Math.sin(angle) * speed,
+                size: size,
+                radius: asteroidSizes[size - 1] / 2, // Radius for size 3
+                points: generateAsteroidShape(asteroidSizes[size - 1] / 2),
+                rotation: Math.random() * 0.02 - 0.01,
+                angle: 0,
+                color: asteroid.color // Use the parent's color
+            });
+        }
+        asteroids.push(...newAsteroids);
     } else if (asteroid.size === 3) {
         // Size 3 asteroid splits into two size 4 asteroids
+		//scatterExplosions.push(createScatterExplosion(asteroid.x, asteroid.y));
         const newAsteroids = [];
         for (let i = 0; i < 2; i++) {
             const angleOffset = Math.PI / 4 * (i === 0 ? -1 : 1); // Two directions
@@ -324,13 +362,15 @@ function handleAsteroidHit(asteroid, laser) {
                 radius: asteroidSizes[size - 1] / 2, // Radius for size 4
                 points: generateAsteroidShape(asteroidSizes[size - 1] / 2),
                 rotation: Math.random() * 0.02 - 0.01,
-                angle: 0
+                angle: 0,
+                color: asteroid.color // Use the parent's color
             });
         }
         asteroids.push(...newAsteroids);
     } else if (asteroid.size === 4) {
         // Size 4 asteroid explodes into pixels
-        explosions.push(createExplosion(asteroid.x, asteroid.y));
+		scatterExplosions.push(createScatterExplosion(asteroid.x, asteroid.y));
+//        explosions.push(createExplosion(asteroid.x, asteroid.y));
     }
 }
 
@@ -464,22 +504,18 @@ function checkCollision(ship, asteroid) {
 
 // End the game
 function endGame(asteroid) {
-    playSound('gameOver'); // Play game over sound
-    // Create ship explosion (3 lines of the ship)
+    playSound('gameOver');
+
     const shipShape = [
-        { x: 0, y: -15 },  // Tip of the ship
-        { x: 10, y: 15 },  // Bottom right
-        { x: -10, y: 15 }  // Bottom left
+        { x: 0, y: -15 },
+        { x: 10, y: 15 },
+        { x: -10, y: 15 }
     ];
     shipExplosion = createLineExplosionFromShape(ship.x, ship.y, shipShape);
-
-    // Create asteroid explosion (use asteroid's shape)
     asteroidExplosion = createLineExplosionFromShape(asteroid.x, asteroid.y, asteroid.points);
 
-    // Set game state to exploding
     gameState = "exploding";
 
-    // Wait for explosion animation to finish, then reset
     setTimeout(() => {
         gameState = "waiting";
         asteroids = [];
@@ -494,7 +530,7 @@ function endGame(asteroid) {
         };
         shipExplosion = [];
         asteroidExplosion = [];
-    }, 2000); // Matches extended lifespan
+    }, 2000);
 }
 
 // Resize the canvas to fit the entire viewport
@@ -598,21 +634,12 @@ function updateShip() {
     // Rotate ship
     if (keys.left) ship.angle -= 0.05; // Rotate counterclockwise
     if (keys.right) ship.angle += 0.05; // Rotate clockwise
-    if (keys.up || keys.down) {
-        playSound('shipFly'); // Play ship flying sound
-    }
+
     // Apply forward thrust in the direction the ship is facing
     if (keys.up) {
         const adjustedAngle = ship.angle - Math.PI / 2;
         ship.velocityX += Math.cos(adjustedAngle) * ship.thrust; // X-component of forward thrust
         ship.velocityY += Math.sin(adjustedAngle) * ship.thrust; // Y-component of forward thrust
-    }
-
-    // Apply reverse thrust (1/4 of forward thrust)
-    if (keys.down) {
-        const adjustedAngle = ship.angle - Math.PI / 2;
-        ship.velocityX -= Math.cos(adjustedAngle) * (ship.thrust / 4); // X-component of reverse thrust
-        ship.velocityY -= Math.sin(adjustedAngle) * (ship.thrust / 4); // Y-component of reverse thrust
     }
 
     // Apply friction to reduce velocity over time
@@ -628,13 +655,18 @@ function updateShip() {
     if (ship.x > canvas.width) ship.x = 0;
     if (ship.y < 0) ship.y = canvas.height;
     if (ship.y > canvas.height) ship.y = 0;
+
+    // Draw the ship with flame when moving forward
+    drawShip(ship.x, ship.y, ship.angle, keys.up);
 }
 
 // Draw the ship
-function drawShip(x, y, angle) {
+function drawShip(x, y, angle, thrusting) {
     ctx.save();
     ctx.translate(x, y);
     ctx.rotate(angle);
+
+    // Draw the ship
     ctx.beginPath();
     ctx.moveTo(0, -15);    // Tip of the ship
     ctx.lineTo(10, 15);    // Bottom right
@@ -642,6 +674,18 @@ function drawShip(x, y, angle) {
     ctx.closePath();
     ctx.strokeStyle = 'white';
     ctx.stroke();
+
+    // Draw the flame when thrusting forward
+    if (thrusting) {
+        ctx.beginPath();
+        ctx.moveTo(0, 15);                 // Rear center of the ship
+        ctx.lineTo(-5, 25 + Math.random() * 5); // Left flame edge with random flicker
+        ctx.lineTo(5, 25 + Math.random() * 5);  // Right flame edge with random flicker
+        ctx.closePath();
+        ctx.fillStyle = 'white';
+        ctx.fill();
+    }
+
     ctx.restore();
 }
 
@@ -659,13 +703,12 @@ function gameLoop() {
         return;
     }
 
-    if (gameState === "exploding") {
-        updateExplosions(); // Update explosion positions
-        drawExplosions();   // Draw explosion lines
-        requestAnimationFrame(gameLoop); // Continue looping
-        return;
-    }
-
+if (gameState === "exploding") {
+    updateExplosions(); // Update explosion positions
+    drawExplosions();   // Render explosion lines
+    requestAnimationFrame(gameLoop); // Continue looping
+    return;
+}
     // Normal game updates
     updateShip();
     drawShip(ship.x, ship.y, ship.angle);

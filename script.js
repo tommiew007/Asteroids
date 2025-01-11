@@ -175,11 +175,19 @@ function drawExplosions() {
     });
 }
 
+
 function drawScore() {
     ctx.fillStyle = "white";
     ctx.font = "20px Arial";
     ctx.textAlign = "left";
     ctx.fillText(`Score: ${score}`, 10, 30); // Display score in the top-left corner
+}
+function drawTom() {
+    ctx.fillStyle = "gray";
+    ctx.font = "20px Arial";
+    ctx.textAlign = "left"; // Align text to the left for the bottom-left corner
+    ctx.textBaseline = "bottom"; // Align text to the bottom
+    ctx.fillText("Tom Wellborn, 2025", 10, canvas.height - 10); // 10px padding from the bottom-left
 }
 
 function drawLasers() {
@@ -725,7 +733,7 @@ if (gameState === "exploding") {
     checkLaserAsteroidCollision(); // Check for laser-asteroid collisions
 
     drawScore(); // Draw the current score
-
+	drawTom();
     requestAnimationFrame(gameLoop); // Repeat
 }
 

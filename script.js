@@ -5,7 +5,8 @@ const sounds = {
     gameOver: new Audio('game-over.mp3'),
     asteroidHit: new Audio('asteroid-hit.mp3'),
     shipFly: new Audio('game-ship-fly.mp3'),
-    laserFire: new Audio('game-laser.mp3')
+    laserFire: new Audio('game-laser.mp3'),
+    gameMusic: new Audio('game-music.mp3') // Add game music
 };
 
 const canvas = document.getElementById('gameCanvas');
@@ -512,7 +513,9 @@ function checkCollision(ship, asteroid) {
 
 // End the game
 function endGame(asteroid) {
-    playSound('gameOver');
+    playSound('gameOver'); // Play game over sound
+    sounds.gameMusic.pause(); // Stop the music
+    sounds.gameMusic.currentTime = 0; // Reset the music to the start
 
     const shipShape = [
         { x: 0, y: -15 },
@@ -580,20 +583,23 @@ window.addEventListener("keydown", (e) => {
     if (e.key === " ") { // Spacebar pressed
         if (gameState === "playing") {
             gameState = "paused"; // Pause the game
+            sounds.gameMusic.pause(); // Pause the music
         } else if (gameState === "paused") {
             gameState = "playing"; // Unpause the game
+            sounds.gameMusic.play(); // Resume the music
             gameLoop(); // Resume the game loop
         }
     }
 
-    // Start the game if in waiting state
+    // Start the game if in the waiting state
     if (gameState === "waiting") {
-        playSound('gameStart'); // Play game start sound
+        playSound('gameStart'); // Play start sound
+        sounds.gameMusic.play(); // Start playing music
         gameState = "playing"; // Switch to playing state
-		asteroids.push(createAsteroid(1)); // Largest
-		asteroids.push(createAsteroid(2)); // Medium
-		asteroids.push(createAsteroid(3)); // Small
-		asteroids.push(createAsteroid(4)); // Smallest	// Start the game
+        asteroids.push(createAsteroid(1)); // Largest
+        asteroids.push(createAsteroid(2)); // Medium
+        asteroids.push(createAsteroid(3)); // Small
+        asteroids.push(createAsteroid(4)); // Smallest
         gameLoop(); // Start the game loop
     }
 });

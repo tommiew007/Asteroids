@@ -6,14 +6,34 @@ const sounds = {
     asteroidHit: new Audio('asteroid-hit.mp3'),
     shipFly: new Audio('game-ship-fly.mp3'),
     laserFire: new Audio('game-laser.mp3'),
-    gameMusic: new Audio('game-music.mp3') // Add game music
+    gameMusic: new Audio('game-music.mp3'),
+    ufoBossFast: new Audio('ufo-boss-fast.mp3'),
+    ufoBossSlow: new Audio('ufo-boss-slow.mp3'),
+    bossLaser: new Audio('game-laser.mp3')
 };
+
+// Set looping for boss sounds
+sounds.ufoBossFast.loop = true;
+sounds.ufoBossSlow.loop = true;
 
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 // Asteroid sizes and speeds
 const asteroidSizes = [100, 60, 30, 15]; // New sizes: Larger for size 1, others scaled down
 const asteroidSpeed = 1.5; // Base speed for asteroids
+const images = {
+    bossFast: new Image(),
+    bossSlow: new Image()
+};
+
+images.bossFast.src = 'boss-fast.png';
+images.bossSlow.src = 'boss-slow.png';
+images.bossFast.onload = () => {
+    console.log('Fast boss image loaded successfully');
+};
+images.bossFast.onerror = () => {
+    console.error('Error loading fast boss image');
+};
 
 // Array to store asteroids
 let asteroids = [];
@@ -33,15 +53,175 @@ let score = 0; // Player's score
 const laserSpeed = 5; // Speed of laser blasts
 const cooldownTime = 1000; // Cooldown time in milliseconds
 
-function playSound(soundKey) {
+let bossShips = []; // Array to hold active boss ships
+
+function createBossShip(size) {
+    const isSmall = size === 'small';
+    return {
+        x: Math.random() > 0.5 ? -50 : canvas.width + 50, // Start offscreen
+        y: Math.random() * canvas.height, // Random vertical position
+        dx: isSmall ? 2 : 1, // Speed: small is faster
+        dy: 0, // No vertical movement
+        size: size, // 'small' or 'large'
+        radius: isSmall ? 20 : 40, // Collision radius
+        sound: isSmall ? 'ufoBossFast' : 'ufoBossSlow', // Corresponding sound
+        fireRate: isSmall ? 5000 : 3000, // Fire rate (ms)
+        lastFireTime: 0 // Timestamp of the last fire
+    };
+}
+
+function spawnBossShip(type) {
+  console.log(`Spawn boss of type: ${type}`);
+  let boss;
+  if (type === "slow") {
+    boss = {
+      x: -50,
+      y: Math.random() * (canvas.height / 2),
+      dx: 1,
+      size: "large",
+      radius: 40,
+      sound: "ufoBossSlow",
+      fireRate: 3000,
+      lastFireTime: Date.now(),
+    };
+  } else {
+    // fast
+    boss = {
+      x: canvas.width + 50,             // right side
+      y: Math.random() * (canvas.height / 2),
+      dx: -2,                           // move left
+      size: "small",
+      radius: 20,
+      sound: "ufoBossFast",
+      fireRate: 1500,
+      lastFireTime: Date.now(),
+    };
+  }
+  bossShips.push(boss);
+  console.log("Boss added:", boss);
+  playSoundWithDebounce(boss.sound, 1000);
+}
+
+function destroyBossShip(index) {
+    const boss = bossShips[index];
+    playSound('asteroidHit');
+    scatterExplosions.push(createScatterExplosion(boss.x, boss.y));
+    stopBossSound(boss);
+    bossShips.splice(index, 1);
+}
+
+function fireBossLaser(boss) {
+    playSound('bossLaser');
+    lasers.push({
+        x: boss.x,
+        y: boss.y,
+        dx: (ship.x - boss.x) * 0.01, // Aim at player
+        dy: (ship.y - boss.y) * 0.01, // Aim at player
+        bossLaser: true // Mark as a boss laser
+    });
+}
+
+let soundTimeouts = {};
+
+function playSoundWithDebounce(soundKey, delay = 200) {
+    if (soundTimeouts[soundKey]) {
+        return; // Prevent repeated triggers during debounce
+    }
+
     const sound = sounds[soundKey];
     if (sound) {
-        sound.currentTime = 0; // Reset playback to start
-        sound.play();
+        // Stop any currently playing sound and reset to start
+        if (!sound.paused) {
+            sound.pause();
+            sound.currentTime = 0;
+        }
+        sound.play().catch((error) => {
+            console.error(`Error playing sound ${soundKey}:`, error);
+        });
+    }
+
+    // Set a debounce timer
+    soundTimeouts[soundKey] = setTimeout(() => {
+        clearTimeout(soundTimeouts[soundKey]);
+        soundTimeouts[soundKey] = null;
+    }, delay);
+}
+
+function drawBossShips() {
+    console.log('Drawing boss ships:', bossShips); // Debug log
+
+    for (const boss of bossShips) {
+        ctx.save();
+        ctx.translate(boss.x, boss.y);
+
+        // Choose image based on boss type
+        const image = boss.size === 'small' ? images.bossFast : images.bossSlow;
+
+        // Debug image selection
+        console.log(`Drawing ${boss.size === 'small' ? 'fast' : 'slow'} boss`, boss);
+
+        ctx.drawImage(
+            image,
+            -boss.radius, // Center horizontally
+            -boss.radius, // Center vertically
+            boss.radius * 2, // Width
+            boss.radius * 2  // Height
+        );
+
+        ctx.restore();
+    }
+}
+function startMusic() {
+    if (sounds.gameMusic.paused) {
+        sounds.gameMusic.play().catch((error) => {
+            console.error("Error starting game music:", error);
+        });
     }
 }
 
+function stopMusic() {
+    if (!sounds.gameMusic.paused) {
+        sounds.gameMusic.pause();
+        sounds.gameMusic.currentTime = 0; // Reset to start
+    }
+}
 
+// Periodically spawn boss ships
+setInterval(spawnBossShip, 10000); // Try spawning a boss every 10 seconds
+
+function playSound(soundKey) {
+    const sound = sounds[soundKey];
+    if (sound && sound.paused) {
+        sound.currentTime = 0; // Reset to the start
+        sound.play().catch((error) => {
+            console.error(`Error playing sound ${soundKey}:`, error);
+        });
+    }
+}
+function playBossSound(boss) {
+    const sound = sounds[boss.sound];
+    if (sound && sound.paused) {
+        sound.play().catch((error) => {
+            console.error(`Error playing boss sound:`, error);
+        });
+    }
+}
+
+function stopBossSound(boss) {
+    const sound = sounds[boss.sound];
+    if (sound && !sound.paused) {
+        sound.pause();
+        sound.currentTime = 0;
+    }
+}
+
+function stopSound(soundKey) {
+    const sound = sounds[soundKey];
+    if (sound && !sound.paused) {
+        sound.pause();
+        sound.currentTime = 0; // Reset to the start
+    }
+}
 function createScatterExplosion(x, y) {
     const particles = [];
     for (let i = 0; i < 20; i++) { // Create 20 small particles
@@ -143,6 +323,52 @@ function updateExplosions() {
     scatterExplosions.forEach(updateParticles);
     updateLines(shipExplosion);
     updateLines(asteroidExplosion);
+}
+function pauseAllSounds() {
+    Object.keys(sounds).forEach((key) => {
+        const sound = sounds[key];
+        if (sound && !sound.paused) {
+            sound.pause();
+            sound.currentTime = 0; // Reset to the beginning
+        }
+    });
+}
+
+function resumeGameSounds() {
+    if (gameState === "playing") {
+        sounds.gameMusic.play().catch((error) => {
+            console.error("Error resuming game music:", error);
+        });
+
+        bossShips.forEach((boss) => {
+            playSoundWithDebounce(boss.sound, 1000);
+        });
+    }
+}
+
+function updateBossShips() {
+    const now = Date.now();
+
+    for (let i = bossShips.length - 1; i >= 0; i--) {
+        const boss = bossShips[i];
+
+        // Move boss
+        boss.x += boss.dx;
+        if (boss.x < -50 || boss.x > canvas.width + 50) {
+            stopBossSound(boss); // Stop sound when offscreen
+            bossShips.splice(i, 1);
+            continue;
+        }
+
+        // Boss fires at player
+        if (now - boss.lastFireTime > boss.fireRate) {
+            boss.lastFireTime = now;
+            fireBossLaser(boss);
+        }
+
+        // Ensure boss sound is playing
+        playBossSound(boss);
+    }
 }
 
 function drawExplosions() {
@@ -513,20 +739,15 @@ function checkCollision(ship, asteroid) {
 
 // End the game
 function endGame(asteroid) {
-    playSound('gameOver'); // Play game over sound
-    sounds.gameMusic.pause(); // Stop the music
-    sounds.gameMusic.currentTime = 0; // Reset the music to the start
+    if (asteroid) {
+        // Create explosion effects for the ship and asteroid
+        shipExplosion = createLineExplosion(ship.x, ship.y);
+        asteroidExplosion = createLineExplosion(asteroid.x, asteroid.y);
+    }
 
-    const shipShape = [
-        { x: 0, y: -15 },
-        { x: 10, y: 15 },
-        { x: -10, y: 15 }
-    ];
-    shipExplosion = createLineExplosionFromShape(ship.x, ship.y, shipShape);
-    asteroidExplosion = createLineExplosionFromShape(asteroid.x, asteroid.y, asteroid.points);
+    gameState = "exploding"; // Set game state to exploding
 
-    gameState = "exploding";
-
+    // Transition to waiting screen after the explosion finishes
     setTimeout(() => {
         gameState = "waiting";
         asteroids = [];
@@ -538,10 +759,10 @@ function endGame(asteroid) {
             velocityY: 0,
             thrust: 0.05,
             friction: 0.99
-        };
+        }; // Reset the ship
         shipExplosion = [];
         asteroidExplosion = [];
-    }, 2000);
+    }, 2000); // Explosion lasts for 2 seconds
 }
 
 // Resize the canvas to fit the entire viewport
@@ -585,7 +806,8 @@ window.addEventListener("keydown", (e) => {
             gameState = "paused"; // Pause the game
             sounds.gameMusic.pause(); // Pause the music
         } else if (gameState === "paused") {
-            gameState = "playing"; // Unpause the game
+            pauseAllSounds();
+			gameState = "playing"; // Unpause the game
             sounds.gameMusic.play(); // Resume the music
             gameLoop(); // Resume the game loop
         }
@@ -616,12 +838,26 @@ window.addEventListener('keydown', (e) => {
     if (e.key === 'ArrowLeft') keys.left = true;
     if (e.key === 'ArrowRight') keys.right = true;
     if (e.key === 'ArrowUp') keys.up = true;
-});
+	if (e.key === 'ArrowDown') keys.down = true; //
 
+    // Spawn slow boss with 'O'
+    if (e.key.toLowerCase() === 'o' && gameState === "playing") {
+        console.log('Spawning slow boss ship');
+        spawnBossShip('slow');
+    }
+
+    // Spawn fast boss with 'P'
+   console.log(`Key pressed: ${e.key}`);
+    if (e.key.toLowerCase() === 'p' && gameState === "playing") {
+         console.log('Spawning fast boss ship');
+		 spawnBossShip('fast');
+    }
+});
 window.addEventListener('keyup', (e) => {
     if (e.key === 'ArrowLeft') keys.left = false;
     if (e.key === 'ArrowRight') keys.right = false;
     if (e.key === 'ArrowUp') keys.up = false;
+    if (e.key === 'ArrowDown') keys.down = false; 
 });
 window.addEventListener('keydown', (e) => {
     if (e.key === 'ArrowLeft') keys.left = true;
@@ -712,6 +948,7 @@ function drawShip(x, y, angle, thrusting) {
 }
 
 // Game loop
+
 function gameLoop() {
     ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear canvas
 
@@ -721,34 +958,51 @@ function gameLoop() {
     }
 
     if (gameState === "paused") {
-        showPauseScreen();
+        pauseAllSounds();
+        
         return;
     }
 
-if (gameState === "exploding") {
-    updateExplosions(); // Update explosion positions
-    drawExplosions();   // Render explosion lines
-    requestAnimationFrame(gameLoop); // Continue looping
-    return;
-}
+    if (gameState === "playing") {
+        startMusic(); // Resume game music
+        resumeGameSounds();
+        bossShips.forEach((boss) => {
+            const sound = sounds[boss.sound];
+            if (sound && sound.paused) {
+                sound.play().catch((error) => {
+                    console.error(`Error playing boss sound:`, error);
+                });
+            }
+        });
+    }
+
+    if (gameState === "exploding") {
+        updateExplosions();
+        drawExplosions();
+        requestAnimationFrame(gameLoop);
+        return;
+    }
+
     // Normal game updates
     updateShip();
-    drawShip(ship.x, ship.y, ship.angle);
+    drawShip(ship.x, ship.y, ship.angle, keys.up);
 
     updateAsteroids();
     drawAsteroids();
 
+    updateBossShips();
+    drawBossShips(); // Ensure this is called
+
     updateLasers();
+	checkLaserAsteroidCollision();
     drawLasers();
 
-    updateExplosions(); // Update explosions during normal gameplay
-    drawExplosions();   // Draw explosions during normal gameplay
+    updateExplosions();
+    drawExplosions();
 
-    checkLaserAsteroidCollision(); // Check for laser-asteroid collisions
+    drawScore();
+    drawTom();
 
-    drawScore(); // Draw the current score
-	drawTom();
-    requestAnimationFrame(gameLoop); // Repeat
+    requestAnimationFrame(gameLoop); // Moved inside the function
 }
-
 gameLoop();

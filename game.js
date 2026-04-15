@@ -36,13 +36,14 @@ const bossImages = {
 const milkyWayPhoto = new Image();
 
 const HUD_FONT = "'Press Start 2P', monospace";
-const GAME_VERSION = "1.049";
+const GAME_VERSION = "1.056";
 const ABOUT_CREDIT_TEXT = `Classic Asteroids HTML5 by Tom Wellborn 2026 v${GAME_VERSION}`;
 const ABOUT_CODEBASE_URL = "https://github.com/tommiew007/Asteroids";
 const ABOUT_WIKI_URL = "https://github.com/tommiew007/Asteroids/wiki";
 const ABOUT_MILKY_WAY_URL = "https://commons.wikimedia.org/wiki/File:ESO_-_Milky_Way.jpg";
 const STORAGE_KEY = "asteroids-high-score";
 const AUDIO_SETTINGS_KEY = "asteroids-audio-settings";
+const HUD_SCORE_DIGITS = 8;
 const ASTEROID_RADII = [48, 28, 16];
 const ASTEROID_SCORES = [20, 50, 100];
 const MAX_STARTING_ASTEROIDS = 11;
@@ -140,6 +141,21 @@ const LARGE_ASTEROID_TEXTURE_REBUILDS_PER_FRAME = 2;
 const LARGE_ASTEROID_GRAVITY_MAX_STEPS = 16;
 const LARGE_ASTEROID_GRAVITY_PER_LEVEL = 0.0016;
 const LARGE_ASTEROID_GRAVITY_RANGE_MULTIPLIER = 12;
+const POWERUP_DURATION_FRAMES = 60 * 60;
+const POWERUP_DURATION_SECONDS = Math.floor(POWERUP_DURATION_FRAMES / 60);
+const POWERUP_EXPIRY_WARNING_FRAMES = 3 * 60;
+const SEEKER_ARRAY_DURATION_FRAMES = 10 * 60;
+const SEEKER_ARRAY_DURATION_SECONDS = Math.floor(SEEKER_ARRAY_DURATION_FRAMES / 60);
+const PLAYER_SHOT_DISTANCE_MULTIPLIER = 2;
+const PLAYER_HOMING_TURN_RATE = 0.055;
+const PLAYER_HOMING_SHOT_SPEED_MULTIPLIER = 0.9;
+const ROGUE_ASTEROID_CHANCE = 0.05;
+const ROGUE_ASTEROID_SPEED_MULTIPLIER = 4;
+const ROGUE_ASTEROID_SCORE_BONUS = 500;
+const NON_ROGUE_ASTEROID_MAX_SPEED_MULTIPLIER = 3;
+const ANTI_GRAVITY_FIELD_RANGE = 180;
+const ANTI_GRAVITY_MIN_GAP = 12;
+const ANTI_GRAVITY_PUSH_FORCE = 0.55;
 const DEFAULT_GAMEPLAY_PROFILE = {
     entityScale: 1,
     movementScale: 1,
@@ -153,6 +169,47 @@ const ASTEROID_COLORWAYS = [
     { stroke: "#a96a4f", fill: "rgba(78, 40, 30, 0.24)", glow: "#a96a4f" },
     { stroke: "#8f5a45", fill: "rgba(66, 34, 27, 0.24)", glow: "#8f5a45" }
 ];
+const ROGUE_ASTEROID_COLORWAY = {
+    stroke: "#dd8d68",
+    fill: "rgba(114, 46, 36, 0.33)",
+    glow: "#f0a47f"
+};
+const TIMED_POWERUP_KEYS = [
+    "rapidFire",
+    "multiShot",
+    "piercing",
+    "thrusters",
+    "maxShields",
+    "gravityDampers",
+    "naniteRepair",
+    "shotRange",
+    "homing",
+    "antiGravity"
+];
+const TIMED_POWERUP_LABELS = {
+    rapidFire: "RAPID FIRE",
+    multiShot: "TWIN CANNONS",
+    piercing: "PIERCING ROUNDS",
+    thrusters: "OVERDRIVE",
+    maxShields: "SHIELD MATRIX",
+    gravityDampers: "GRAV DAMPERS",
+    naniteRepair: "NANITE REPAIR",
+    shotRange: "RANGE LENSES",
+    homing: "SEEKER ARRAY",
+    antiGravity: "ANTI-GRAV FIELD"
+};
+const TIMED_POWERUP_MAX_STACKS = {
+    rapidFire: 4,
+    multiShot: 3,
+    piercing: 3,
+    thrusters: 4,
+    maxShields: 3,
+    gravityDampers: LARGE_ASTEROID_GRAVITY_MAX_STEPS,
+    naniteRepair: 1,
+    shotRange: 1,
+    homing: 1,
+    antiGravity: 1
+};
 const PALETTE = {
     bgTop: "#030712",
     bgBottom: "#0a1633",
@@ -167,6 +224,7 @@ const PALETTE = {
     enemyShot: "#ff9a76",
     mineralGlow: "rgba(145, 170, 185, 0.25)",
     mineralPickup: "#73ff9b",
+    antiGravity: "#8fffd3",
     hud: "#f3f7ff",
     hudAccent: "#f8b36b",
     combo: "#ffd166"
@@ -216,8 +274,27 @@ sounds.gameStart.volume = 0.45;
 sounds.gameOver.volume = 0.5;
 sounds.titanAlarm.volume = 0.44;
 
-bossImages.small.src = "ufo-small.svg";
-bossImages.large.src = "ufo-large.svg";
+function isBlockedAsteroidImagePath(src) {
+    if (typeof src !== "string") {
+        return false;
+    }
+    return /asteroid[^/\\]*\.(png|jpe?g|webp|gif|svg)$/i.test(src.trim());
+}
+
+function setSafeImageSource(image, src, label = "image") {
+    if (!image || typeof src !== "string") {
+        return false;
+    }
+    if (isBlockedAsteroidImagePath(src)) {
+        console.warn(`[Asteroids] Blocked removed asteroid image source for ${label}: ${src}`);
+        return false;
+    }
+    image.src = src;
+    return true;
+}
+
+setSafeImageSource(bossImages.small, "ufo-small.svg", "small boss");
+setSafeImageSource(bossImages.large, "ufo-large.svg", "large boss");
 milkyWayPhoto.decoding = "async";
 milkyWayPhoto.addEventListener("load", () => {
     milkyWayPhotoReady = true;
@@ -225,7 +302,7 @@ milkyWayPhoto.addEventListener("load", () => {
 milkyWayPhoto.addEventListener("error", () => {
     milkyWayPhotoReady = false;
 });
-milkyWayPhoto.src = "assets/milky-way.jpg";
+setSafeImageSource(milkyWayPhoto, "assets/milky-way.jpg", "milky way");
 
 const keys = {
     left: false,
@@ -269,8 +346,10 @@ let enemyShots = [];
 let ufos = [];
 let decoys = [];
 let particles = [];
+let gameplayFrameClock = 0;
 let gameplayProfile = { ...DEFAULT_GAMEPLAY_PROFILE };
 let upgradeState = createUpgradeState();
+let upgradeExpirations = createUpgradeExpirationState();
 let ship = createShip(0);
 let upgradeChoices = [];
 let upgradeDraftMode = "wave";
@@ -293,6 +372,8 @@ let comboTimer = 0;
 let comboDisplayTimer = 0;
 let bonusBannerTimer = 0;
 let bonusBannerText = "";
+let powerupExpiryWarning = null;
+let shipPowerupWarningBlinkFrames = 0;
 let titanPulseTimer = 0;
 let titanChildBatchSerial = 0;
 let activeTitanChildBatchIds = new Set();
@@ -1181,8 +1262,153 @@ function createUpgradeState() {
         piercing: 0,
         thrusters: 0,
         maxShields: 0,
-        gravityDampers: 0
+        gravityDampers: 0,
+        naniteRepair: 0,
+        shotRange: 0,
+        homing: 0,
+        antiGravity: 0
     };
+}
+
+function createUpgradeExpirationState() {
+    const state = {};
+    for (const key of TIMED_POWERUP_KEYS) {
+        state[key] = [];
+    }
+    return state;
+}
+
+function syncUpgradeStateFromTimers() {
+    const previousMaxShields = upgradeState.maxShields;
+
+    for (const key of TIMED_POWERUP_KEYS) {
+        upgradeState[key] = upgradeExpirations[key].length;
+    }
+
+    if (!ship) {
+        return;
+    }
+
+    ship.thrust = 0.12 * gameplayProfile.movementScale * getThrusterMultiplier();
+    ship.maxSpeed = SHIP_BASE_MAX_SPEED * gameplayProfile.movementScale * getShipTopSpeedMultiplier();
+    ship.shields = Math.min(ship.shields, upgradeState.maxShields);
+    if (upgradeState.maxShields > previousMaxShields) {
+        ship.shields = upgradeState.maxShields;
+    }
+    ship.fireCooldown = Math.min(ship.fireCooldown, getPlayerFireCooldown());
+}
+
+function pruneExpiredTimedPowerups() {
+    let changed = false;
+    for (const key of TIMED_POWERUP_KEYS) {
+        const stackExpirations = upgradeExpirations[key];
+        for (let index = stackExpirations.length - 1; index >= 0; index -= 1) {
+            if (stackExpirations[index] <= gameplayFrameClock) {
+                stackExpirations.splice(index, 1);
+                changed = true;
+            }
+        }
+    }
+
+    if (changed) {
+        syncUpgradeStateFromTimers();
+    }
+}
+
+function addTimedPowerupStack(key, maxStacks = 1, duration = POWERUP_DURATION_FRAMES) {
+    const stackExpirations = upgradeExpirations[key];
+    if (!stackExpirations) {
+        return false;
+    }
+
+    pruneExpiredTimedPowerups();
+
+    const expiration = gameplayFrameClock + duration;
+    if (stackExpirations.length >= maxStacks) {
+        let soonestIndex = 0;
+        for (let index = 1; index < stackExpirations.length; index += 1) {
+            if (stackExpirations[index] < stackExpirations[soonestIndex]) {
+                soonestIndex = index;
+            }
+        }
+        stackExpirations[soonestIndex] = expiration;
+    } else {
+        stackExpirations.push(expiration);
+    }
+
+    syncUpgradeStateFromTimers();
+    return true;
+}
+
+function consumeTimedPowerupStack(key) {
+    const stackExpirations = upgradeExpirations[key];
+    if (!stackExpirations || stackExpirations.length === 0) {
+        return false;
+    }
+
+    let soonestIndex = 0;
+    for (let index = 1; index < stackExpirations.length; index += 1) {
+        if (stackExpirations[index] < stackExpirations[soonestIndex]) {
+            soonestIndex = index;
+        }
+    }
+    stackExpirations.splice(soonestIndex, 1);
+    syncUpgradeStateFromTimers();
+    return true;
+}
+
+function updateTimedPowerups(dt) {
+    gameplayFrameClock += dt;
+    pruneExpiredTimedPowerups();
+    updatePowerupExpiryWarning();
+}
+
+function getSoonestTimedPowerupExpiration() {
+    let soonestKey = null;
+    let soonestRemaining = Infinity;
+
+    for (const key of TIMED_POWERUP_KEYS) {
+        const stackExpirations = upgradeExpirations[key];
+        if (!stackExpirations || stackExpirations.length === 0) {
+            continue;
+        }
+
+        for (const expiration of stackExpirations) {
+            const remaining = expiration - gameplayFrameClock;
+            if (remaining > 0 && remaining < soonestRemaining) {
+                soonestRemaining = remaining;
+                soonestKey = key;
+            }
+        }
+    }
+
+    if (!soonestKey || !Number.isFinite(soonestRemaining)) {
+        return null;
+    }
+
+    return {
+        key: soonestKey,
+        remainingFrames: soonestRemaining
+    };
+}
+
+function updatePowerupExpiryWarning() {
+    const soonest = getSoonestTimedPowerupExpiration();
+    if (!soonest || soonest.remainingFrames > POWERUP_EXPIRY_WARNING_FRAMES) {
+        powerupExpiryWarning = null;
+        shipPowerupWarningBlinkFrames = 0;
+        return;
+    }
+
+    const secondsRemaining = Math.max(0, soonest.remainingFrames / 60);
+    const label = TIMED_POWERUP_LABELS[soonest.key] || "POWER-UP";
+    powerupExpiryWarning = {
+        key: soonest.key,
+        label,
+        remainingFrames: soonest.remainingFrames,
+        secondsRemaining
+    };
+    shipPowerupWarningBlinkFrames = soonest.remainingFrames;
 }
 
 function getMaxPlayerShots() {
@@ -1201,6 +1427,19 @@ function getPlayerProjectileCount() {
 
 function getPlayerPierce() {
     return upgradeState.piercing;
+}
+
+function getPlayerShotLife() {
+    const rangeMultiplier = upgradeState.shotRange > 0 ? PLAYER_SHOT_DISTANCE_MULTIPLIER : 1;
+    return PLAYER_SHOT_LIFE * rangeMultiplier;
+}
+
+function hasHomingShots() {
+    return upgradeState.homing > 0;
+}
+
+function hasAntiGravityField() {
+    return upgradeState.antiGravity > 0;
 }
 
 function getThrusterMultiplier() {
@@ -1336,54 +1575,57 @@ function getScreenShakeOffset() {
     };
 }
 
-function getUpgradePool() {
-    return [
+function getUpgradePool(includeUnavailable = false) {
+    pruneExpiredTimedPowerups();
+    const upgrades = [
         {
             id: "rapid-fire",
             title: "Rapid Fire",
-            description: "Fire faster and keep one more shot on screen.",
-            canOffer: () => upgradeState.rapidFire < 4,
+            description: "Fire faster and keep one more shot on screen for 60s.",
+            timed: true,
+            canOffer: () => upgradeState.rapidFire < TIMED_POWERUP_MAX_STACKS.rapidFire,
             apply: () => {
-                upgradeState.rapidFire += 1;
-                ship.fireCooldown = Math.min(ship.fireCooldown, getPlayerFireCooldown());
+                addTimedPowerupStack("rapidFire", TIMED_POWERUP_MAX_STACKS.rapidFire);
             }
         },
         {
             id: "twin-cannons",
             title: "Twin Cannons",
-            description: "Add another projectile to every shot.",
-            canOffer: () => upgradeState.multiShot < 3,
+            description: "Add another projectile to every shot for 60s.",
+            timed: true,
+            canOffer: () => upgradeState.multiShot < TIMED_POWERUP_MAX_STACKS.multiShot,
             apply: () => {
-                upgradeState.multiShot += 1;
+                addTimedPowerupStack("multiShot", TIMED_POWERUP_MAX_STACKS.multiShot);
             }
         },
         {
             id: "piercing-rounds",
             title: "Piercing Rounds",
-            description: "Shots punch through one extra target.",
-            canOffer: () => upgradeState.piercing < 3,
+            description: "Shots punch through one extra target for 60s.",
+            timed: true,
+            canOffer: () => upgradeState.piercing < TIMED_POWERUP_MAX_STACKS.piercing,
             apply: () => {
-                upgradeState.piercing += 1;
+                addTimedPowerupStack("piercing", TIMED_POWERUP_MAX_STACKS.piercing);
             }
         },
         {
             id: "overdrive-thrusters",
             title: "Overdrive",
-            description: "More thrust and higher top speed for better survival.",
-            canOffer: () => upgradeState.thrusters < 4,
+            description: "More thrust and higher top speed for 60s.",
+            timed: true,
+            canOffer: () => upgradeState.thrusters < TIMED_POWERUP_MAX_STACKS.thrusters,
             apply: () => {
-                upgradeState.thrusters += 1;
-                ship.thrust = 0.12 * gameplayProfile.movementScale * getThrusterMultiplier();
-                ship.maxSpeed = SHIP_BASE_MAX_SPEED * gameplayProfile.movementScale * getShipTopSpeedMultiplier();
+                addTimedPowerupStack("thrusters", TIMED_POWERUP_MAX_STACKS.thrusters);
             }
         },
         {
             id: "shield-matrix",
             title: "Shield Matrix",
-            description: "Gain a rechargeable shield layer and refill it now.",
-            canOffer: () => upgradeState.maxShields < 3,
+            description: "Gain a shield layer and refill now for 60s.",
+            timed: true,
+            canOffer: () => upgradeState.maxShields < TIMED_POWERUP_MAX_STACKS.maxShields,
             apply: () => {
-                upgradeState.maxShields += 1;
+                addTimedPowerupStack("maxShields", TIMED_POWERUP_MAX_STACKS.maxShields);
                 ship.shields = upgradeState.maxShields;
                 triggerFlash(PALETTE.shield, 0.16);
             }
@@ -1391,26 +1633,67 @@ function getUpgradePool() {
         {
             id: "grav-dampers",
             title: "Grav Dampers",
-            description: "Reduce large-asteroid gravity by one wave step.",
+            description: "Reduce large-asteroid gravity by one step for 60s.",
+            timed: true,
             alwaysOffer: () => getEffectiveGravitySteps() > 0,
-            canOffer: () => true,
+            canOffer: () => getEffectiveGravitySteps() > 0
+                && upgradeState.gravityDampers < TIMED_POWERUP_MAX_STACKS.gravityDampers,
             apply: () => {
-                upgradeState.gravityDampers += 1;
+                addTimedPowerupStack("gravityDampers", TIMED_POWERUP_MAX_STACKS.gravityDampers);
                 triggerFlash(PALETTE.shield, 0.12);
             }
         },
         {
             id: "nanite-repair",
             title: "Nanite Repair",
-            description: "Restore one ship and fully recharge shields.",
-            canOffer: () => true,
+            description: "For 60s, a lethal hit is negated once.",
+            timed: true,
+            canOffer: () => upgradeState.naniteRepair < TIMED_POWERUP_MAX_STACKS.naniteRepair,
             apply: () => {
-                lives += 1;
+                addTimedPowerupStack("naniteRepair", TIMED_POWERUP_MAX_STACKS.naniteRepair);
                 ship.shields = upgradeState.maxShields;
                 triggerFlash(PALETTE.shield, 0.2);
             }
+        },
+        {
+            id: "range-lenses",
+            title: "Range Lenses",
+            description: "Double laser travel distance for 60s.",
+            timed: true,
+            canOffer: () => upgradeState.shotRange < TIMED_POWERUP_MAX_STACKS.shotRange,
+            apply: () => {
+                addTimedPowerupStack("shotRange", TIMED_POWERUP_MAX_STACKS.shotRange);
+            }
+        },
+        {
+            id: "seeker-array",
+            title: "Seeker Array",
+            description: "Lasers home toward the nearest asteroid for 10s.",
+            timed: true,
+            durationSeconds: SEEKER_ARRAY_DURATION_SECONDS,
+            canOffer: () => upgradeState.homing < TIMED_POWERUP_MAX_STACKS.homing,
+            apply: () => {
+                addTimedPowerupStack("homing", TIMED_POWERUP_MAX_STACKS.homing, SEEKER_ARRAY_DURATION_FRAMES);
+            }
+        },
+        {
+            id: "anti-gravity-field",
+            title: "Anti-Gravity",
+            description: "Repel incoming objects and prevent collisions for 60s.",
+            timed: true,
+            canOffer: () => upgradeState.antiGravity < TIMED_POWERUP_MAX_STACKS.antiGravity,
+            apply: () => {
+                addTimedPowerupStack("antiGravity", TIMED_POWERUP_MAX_STACKS.antiGravity);
+                triggerFlash(PALETTE.antiGravity, 0.16);
+            }
         }
-    ].filter((upgrade) => upgrade.canOffer());
+    ];
+
+    if (includeUnavailable) {
+        return upgrades;
+    }
+
+    return upgrades.filter((upgrade) => upgrade.canOffer());
 }
 
 function buildUpgradeChoices() {
@@ -1535,7 +1818,13 @@ function chooseUpgrade(index) {
 
     choice.apply();
     playEffect("gameBonus");
-    showBossAlert(choice.title.toUpperCase(), 120);
+    const choiceDurationSeconds = Number.isFinite(choice.durationSeconds)
+        ? choice.durationSeconds
+        : POWERUP_DURATION_SECONDS;
+    const choiceLabel = choice.timed
+        ? `${choice.title.toUpperCase()} ${choiceDurationSeconds}s`
+        : choice.title.toUpperCase();
+    showBossAlert(choiceLabel, 120);
     upgradeChoices = [];
     syncUpgradeOverlay();
 
@@ -1919,7 +2208,9 @@ function startGame() {
     bossAlertMessage = "";
     surgeActive = false;
     surgeTimer = 0;
+    gameplayFrameClock = 0;
     upgradeState = createUpgradeState();
+    upgradeExpirations = createUpgradeExpirationState();
     upgradeChoices = [];
     upgradeDraftMode = "wave";
     upgradeReturnState = "playing";
@@ -1934,6 +2225,8 @@ function startGame() {
     flashColor = "#ffffff";
     bonusBannerTimer = 0;
     bonusBannerText = "";
+    powerupExpiryWarning = null;
+    shipPowerupWarningBlinkFrames = 0;
     titanPulseTimer = 0;
     resetTitanChildTracking();
     autoPausedForFocusLoss = false;
@@ -2280,6 +2573,11 @@ function createAsteroid(sizeIndex = 0, x, y, angle, inheritedSpeed, options = {}
     const speed = typeof inheritedSpeed === "number"
         ? inheritedSpeed
         : randomBetween(1.2 + sizeIndex * 0.25, 1.9 + sizeIndex * 0.35) * gameplayProfile.movementScale;
+    const baseSpeed = Number.isFinite(options.baseSpeed) ? options.baseSpeed : Math.max(0.01, Math.abs(speed));
+    const isRogue = Boolean(options.rogue);
+    const maxSpeed = Number.isFinite(options.maxSpeed)
+        ? options.maxSpeed
+        : (isRogue ? Infinity : baseSpeed * NON_ROGUE_ASTEROID_MAX_SPEED_MULTIPLIER);
     const elite = Boolean(options.elite);
     const colorway = options.colorway || pickRandomAsteroidColorway();
 
@@ -2301,8 +2599,11 @@ function createAsteroid(sizeIndex = 0, x, y, angle, inheritedSpeed, options = {}
         largeVisualTextureSize: 0,
         largeVisualTextureDirty: sizeIndex === 0,
         elite,
-        durability: options.durability || (elite ? 2 : 1),
-        scoreBonus: options.scoreBonus || (elite ? 40 + sizeIndex * 20 : 0),
+        rogue: isRogue,
+        baseSpeed,
+        maxSpeed,
+        durability: options.durability ?? (elite ? 2 : 1),
+        scoreBonus: options.scoreBonus ?? (elite ? 40 + sizeIndex * 20 : 0),
         titanChildBatchId: options.titanChildBatchId ?? null
     };
 }
@@ -2557,7 +2858,7 @@ function openGodModeUpgradeDraft() {
         return;
     }
 
-    upgradeChoices = getUpgradePool();
+    upgradeChoices = getUpgradePool(true);
     if (upgradeChoices.length === 0) {
         showBossAlert("NO UPGRADES AVAILABLE", 120);
         return;
@@ -2667,6 +2968,37 @@ function spawnDebugDecoys() {
     }
 
     showBossAlert("TEST DECOYS", 120);
+}
+
+function spawnDebugRogueAsteroid() {
+    if (!godModeEnabled || gameState === "about" || gameState === "help" || gameState === "godHelp" || gameState === "upgrade") {
+        return;
+    }
+
+    if (gameState === "waiting" || gameState === "gameOver") {
+        startGame();
+    }
+
+    if (gameState !== "playing" && gameState !== "paused") {
+        return;
+    }
+
+    const sizeIndex = Math.random() < 0.5 ? 1 : 2;
+    const radius = ASTEROID_RADII[sizeIndex] * gameplayProfile.entityScale;
+    const spawnPosition = generateOffscreenPosition(radius);
+    const heading = Math.atan2(
+        canvas.height * 0.5 - spawnPosition.y,
+        canvas.width * 0.5 - spawnPosition.x
+    ) + randomBetween(-0.28, 0.28);
+    const baseSpeed = randomBetween(1.4 + sizeIndex * 0.25, 2 + sizeIndex * 0.3) * gameplayProfile.movementScale;
+    const rogueSpeed = baseSpeed * ROGUE_ASTEROID_SPEED_MULTIPLIER;
+
+    asteroids.push(createAsteroid(sizeIndex, spawnPosition.x, spawnPosition.y, heading, rogueSpeed, {
+        colorway: ROGUE_ASTEROID_COLORWAY,
+        rogue: true,
+        scoreBonus: ROGUE_ASTEROID_SCORE_BONUS
+    }));
+    showBossAlert("TEST ROGUE ASTEROID", 120);
 }
 
 function spawnDebugTitanWave() {
@@ -2855,6 +3187,122 @@ function getWrappedAxisDelta(from, to, span) {
     return delta;
 }
 
+function clampEntitySpeed(entity, maxSpeed) {
+    if (!Number.isFinite(maxSpeed) || maxSpeed <= 0) {
+        return;
+    }
+
+    const speed = Math.hypot(entity.vx, entity.vy);
+    if (speed <= maxSpeed || speed <= 0.0001) {
+        return;
+    }
+
+    entity.vx = (entity.vx / speed) * maxSpeed;
+    entity.vy = (entity.vy / speed) * maxSpeed;
+}
+
+function applyAntiGravityRepulsionToEntity(entity, dt, options = {}) {
+    if (!entity || !ship.active || ship.hyperspaceSequence) {
+        return;
+    }
+
+    const entityRadius = Number.isFinite(entity.radius) ? entity.radius : 2;
+    const fieldRange = ANTI_GRAVITY_FIELD_RANGE * gameplayProfile.entityScale;
+    const maxInfluenceDistance = ship.radius + entityRadius + fieldRange;
+
+    let dx = getWrappedAxisDelta(ship.x, entity.x, canvas.width);
+    let dy = getWrappedAxisDelta(ship.y, entity.y, canvas.height);
+    let distance = Math.hypot(dx, dy);
+
+    if (!Number.isFinite(distance)) {
+        return;
+    }
+
+    if (distance < 0.0001) {
+        const escapeAngle = Math.random() * Math.PI * 2;
+        dx = Math.cos(escapeAngle);
+        dy = Math.sin(escapeAngle);
+        distance = 1;
+    }
+
+    if (distance > maxInfluenceDistance) {
+        return;
+    }
+
+    const ux = dx / distance;
+    const uy = dy / distance;
+    const separationFromHull = Math.max(0, distance - ship.radius - entityRadius);
+    const proximity = Math.max(0, Math.min(1, 1 - (separationFromHull / fieldRange)));
+
+    if (proximity <= 0) {
+        return;
+    }
+
+    // Slow incoming movement first, then push outward harder as objects get closer.
+    const radialVelocity = entity.vx * ux + entity.vy * uy;
+    if (radialVelocity < 0) {
+        const braking = -radialVelocity * (0.45 + proximity * 0.55) * dt;
+        entity.vx += ux * braking;
+        entity.vy += uy * braking;
+    }
+
+    const massFactor = Math.max(0.4, 1 + entityRadius * 0.055);
+    const push = (ANTI_GRAVITY_PUSH_FORCE * (0.3 + proximity * proximity * 2.9) * dt) / massFactor;
+    entity.vx += ux * push;
+    entity.vy += uy * push;
+
+    if (Number.isFinite(options.maxSpeed)) {
+        clampEntitySpeed(entity, options.maxSpeed);
+    }
+
+    const minimumSeparation = ship.radius + entityRadius + ANTI_GRAVITY_MIN_GAP * gameplayProfile.entityScale;
+    if (distance < minimumSeparation) {
+        entity.x = ship.x + ux * minimumSeparation;
+        entity.y = ship.y + uy * minimumSeparation;
+        if (options.wrap !== false) {
+            wrapEntity(entity, entityRadius);
+        }
+    }
+}
+
+function applyAntiGravityField(dt) {
+    if (!hasAntiGravityField() || !ship.active || ship.hyperspaceSequence) {
+        return;
+    }
+
+    for (const asteroid of asteroids) {
+        const asteroidSpeedCap = Number.isFinite(asteroid.maxSpeed)
+            ? asteroid.maxSpeed * 1.3
+            : 8.5 * gameplayProfile.movementScale;
+        applyAntiGravityRepulsionToEntity(asteroid, dt, { maxSpeed: asteroidSpeedCap });
+    }
+
+    for (const ufo of ufos) {
+        applyAntiGravityRepulsionToEntity(ufo, dt, { maxSpeed: 4.8 * gameplayProfile.movementScale });
+    }
+
+    for (const decoy of decoys) {
+        applyAntiGravityRepulsionToEntity(decoy, dt, { maxSpeed: 5.6 * gameplayProfile.movementScale });
+    }
+
+    for (const shot of enemyShots) {
+        applyAntiGravityRepulsionToEntity(shot, dt, { maxSpeed: 10.5 * gameplayProfile.shotScale });
+    }
+
+    if (threatBomb) {
+        applyAntiGravityRepulsionToEntity(threatBomb, dt, { maxSpeed: 5.8 * gameplayProfile.movementScale });
+    }
+
+    if (mineralField) {
+        for (const mineral of mineralField.particles) {
+            applyAntiGravityRepulsionToEntity(mineral, dt, {
+                wrap: false,
+                maxSpeed: 5.2 * gameplayProfile.movementScale
+            });
+        }
+    }
+}
+
 function bounceShipOffAsteroid(asteroid) {
     let dx = ship.x - asteroid.x;
     let dy = ship.y - asteroid.y;
@@ -3009,15 +3457,18 @@ function createLineBurst(
 }
 
 function spawnPlayerProjectile(angle) {
-    const shotSpeed = PLAYER_SHOT_SPEED * gameplayProfile.shotScale;
+    const homing = hasHomingShots();
+    const baseShotSpeed = PLAYER_SHOT_SPEED * gameplayProfile.shotScale;
+    const shotSpeed = homing ? baseShotSpeed * PLAYER_HOMING_SHOT_SPEED_MULTIPLIER : baseShotSpeed;
     playerShots.push({
         x: ship.x + Math.cos(angle) * (18 * ship.modelScale),
         y: ship.y + Math.sin(angle) * (18 * ship.modelScale),
         vx: ship.vx + Math.cos(angle) * shotSpeed,
         vy: ship.vy + Math.sin(angle) * shotSpeed,
         radius: 2 * gameplayProfile.entityScale,
-        life: PLAYER_SHOT_LIFE,
-        pierce: getPlayerPierce()
+        life: getPlayerShotLife(),
+        pierce: getPlayerPierce(),
+        homing
     });
 }
 
@@ -3280,6 +3731,9 @@ function destroyAsteroid(index, shotAngle, awardPoints = true) {
     playEffect("asteroidHit");
     if (awardPoints) {
         registerKillScore(ASTEROID_SCORES[asteroid.sizeIndex] + asteroid.scoreBonus);
+        if (asteroid.rogue) {
+            showBonusAward(ROGUE_ASTEROID_SCORE_BONUS, "ROGUE ASTEROID BONUS");
+        }
     }
     addScreenShake(asteroid.elite ? 11 : 6, asteroid.elite ? 16 : 8);
     triggerFlash(asteroid.strokeColor, asteroid.elite ? 0.18 : 0.08);
@@ -3290,18 +3744,34 @@ function destroyAsteroid(index, shotAngle, awardPoints = true) {
         const inheritedSpeed = (
             Math.hypot(asteroid.vx, asteroid.vy) + 0.45 * gameplayProfile.movementScale
         ) * surgeSplitSpeedMultiplier;
+        const rogueSpawnIndex = awardPoints && Math.random() < ROGUE_ASTEROID_CHANCE
+            ? (Math.random() < 0.5 ? 0 : 1)
+            : -1;
+        if (rogueSpawnIndex >= 0) {
+            showBossAlert("ROGUE ASTEROID", 105);
+        }
 
+        let childIndex = 0;
         for (let indexOffset = -1; indexOffset <= 1; indexOffset += 2) {
             const splitAngle = shotAngle + indexOffset * randomBetween(0.45, 0.8);
+            const isRogueChild = childIndex === rogueSpawnIndex;
+            const childSpeed = isRogueChild
+                ? inheritedSpeed * ROGUE_ASTEROID_SPEED_MULTIPLIER
+                : inheritedSpeed;
+            const eliteChildBonus = asteroid.elite && nextSize === 1
+                ? Math.max(20, asteroid.scoreBonus - 20)
+                : 0;
             asteroids.push(
-                createAsteroid(nextSize, asteroid.x, asteroid.y, splitAngle, inheritedSpeed, {
+                createAsteroid(nextSize, asteroid.x, asteroid.y, splitAngle, childSpeed, {
                     elite: asteroid.elite && nextSize === 1,
                     durability: asteroid.elite && nextSize === 1 ? 2 : 1,
-                    scoreBonus: asteroid.elite && nextSize === 1 ? Math.max(20, asteroid.scoreBonus - 20) : 0,
-                    colorway: asteroid.colorway,
+                    scoreBonus: eliteChildBonus + (isRogueChild ? ROGUE_ASTEROID_SCORE_BONUS : 0),
+                    colorway: isRogueChild ? ROGUE_ASTEROID_COLORWAY : asteroid.colorway,
+                    rogue: isRogueChild,
                     titanChildBatchId: destroyedTitanChildBatchId
                 })
             );
+            childIndex += 1;
         }
     }
 
@@ -3348,6 +3818,18 @@ function destroyShip() {
         addScreenShake(6, 10);
         triggerFlash(PALETTE.shield, 0.18);
         playEffect("gameBonus");
+        return;
+    }
+
+    if (upgradeState.naniteRepair > 0 && consumeTimedPowerupStack("naniteRepair")) {
+        ship.invulnerable = 95;
+        ship.vx *= -0.35;
+        ship.vy *= -0.35;
+        createLineBurst(ship.x, ship.y, PALETTE.shield, 16, 1.1, 3.6, 14, 40);
+        addScreenShake(8, 12);
+        triggerFlash(PALETTE.shield, 0.24);
+        playEffect("gameBonus");
+        showBossAlert("NANITE SAVE", 110);
         return;
     }
 
@@ -3473,12 +3955,16 @@ function updateAsteroids(dt) {
             const seekAngle = Math.atan2(ship.y - asteroid.y, ship.x - asteroid.x);
             asteroid.vx += Math.cos(seekAngle) * 0.0022 * gameplayProfile.movementScale * dt;
             asteroid.vy += Math.sin(seekAngle) * 0.0022 * gameplayProfile.movementScale * dt;
+        }
 
-            const eliteSpeedCap = (2.6 + asteroid.sizeIndex * 0.35) * gameplayProfile.movementScale;
-            const eliteSpeed = Math.hypot(asteroid.vx, asteroid.vy);
-            if (eliteSpeed > eliteSpeedCap) {
-                asteroid.vx = (asteroid.vx / eliteSpeed) * eliteSpeedCap;
-                asteroid.vy = (asteroid.vy / eliteSpeed) * eliteSpeedCap;
+        if (!asteroid.rogue) {
+            const maxSpeed = Number.isFinite(asteroid.maxSpeed) ? asteroid.maxSpeed : Infinity;
+            if (Number.isFinite(maxSpeed) && maxSpeed > 0) {
+                const speed = Math.hypot(asteroid.vx, asteroid.vy);
+                if (speed > maxSpeed) {
+                    asteroid.vx = (asteroid.vx / speed) * maxSpeed;
+                    asteroid.vy = (asteroid.vy / speed) * maxSpeed;
+                }
             }
         }
 
@@ -3489,9 +3975,49 @@ function updateAsteroids(dt) {
     }
 }
 
+function getNearestAsteroidToPoint(x, y) {
+    if (asteroids.length === 0) {
+        return null;
+    }
+
+    let nearestAsteroid = null;
+    let nearestDistanceSq = Infinity;
+    for (const asteroid of asteroids) {
+        const dx = asteroid.x - x;
+        const dy = asteroid.y - y;
+        const distanceSq = dx * dx + dy * dy;
+        if (distanceSq < nearestDistanceSq) {
+            nearestDistanceSq = distanceSq;
+            nearestAsteroid = asteroid;
+        }
+    }
+    return nearestAsteroid;
+}
+
+function updateHomingShot(shot, dt) {
+    const target = getNearestAsteroidToPoint(shot.x, shot.y);
+    if (!target) {
+        return;
+    }
+
+    const desiredAngle = Math.atan2(target.y - shot.y, target.x - shot.x);
+    const currentAngle = Math.atan2(shot.vy, shot.vx);
+    const delta = getShortestAngleDelta(currentAngle, desiredAngle);
+    const maxTurn = PLAYER_HOMING_TURN_RATE * dt;
+    const turn = Math.max(-maxTurn, Math.min(maxTurn, delta));
+    const nextAngle = currentAngle + turn;
+    const speed = Math.hypot(shot.vx, shot.vy);
+    shot.vx = Math.cos(nextAngle) * speed;
+    shot.vy = Math.sin(nextAngle) * speed;
+}
+
 function updateShotArray(shotArray, dt) {
+    const homingShots = shotArray === playerShots;
     for (let index = shotArray.length - 1; index >= 0; index -= 1) {
         const shot = shotArray[index];
+        if (homingShots && shot.homing) {
+            updateHomingShot(shot, dt);
+        }
         shot.x += shot.vx * dt;
         shot.y += shot.vy * dt;
         shot.life -= dt;
@@ -3612,7 +4138,7 @@ function updateThreatBomb(dt) {
         addScreenShake(2, 3);
     }
 
-    if (ship.active && !ship.hyperspaceSequence && circlesOverlap(threatBomb, ship)) {
+    if (ship.active && !ship.hyperspaceSequence && !hasAntiGravityField() && circlesOverlap(threatBomb, ship)) {
         bounceDynamicCircleOffCircle(threatBomb, ship, {
             minimumRebound: 1.35,
             maxSpeed: 5.5 * gameplayProfile.movementScale,
@@ -3669,7 +4195,7 @@ function updateMineralField(dt) {
         mineral.y += mineral.vy * dt;
         mineral.angle += mineral.rotation * dt;
 
-        if (ship.active && circlesOverlap(ship, mineral)) {
+        if (ship.active && !hasAntiGravityField() && circlesOverlap(ship, mineral)) {
             collectMineralParticle(index);
             continue;
         }
@@ -3847,7 +4373,7 @@ function handleDecoyCollisions() {
             continue;
         }
 
-        if (ship.active && !ship.hyperspaceSequence && circlesOverlap(decoy, ship)) {
+        if (ship.active && !ship.hyperspaceSequence && !hasAntiGravityField() && circlesOverlap(decoy, ship)) {
             if (!godModeEnabled) {
                 destroyShip();
             }
@@ -3858,6 +4384,10 @@ function handleDecoyCollisions() {
 
 function handleShipCollisions() {
     if (!ship.active || ship.hyperspaceSequence || (ship.invulnerable > 0 && !godModeEnabled)) {
+        return;
+    }
+
+    if (hasAntiGravityField()) {
         return;
     }
 
@@ -3928,6 +4458,7 @@ function updateGame(dt) {
         return;
     }
 
+    updateTimedPowerups(dt);
     updateShip(dt);
     updateAsteroids(dt);
     updateShotArray(playerShots, dt);
@@ -3936,6 +4467,7 @@ function updateGame(dt) {
     updateDecoys(dt);
     updateThreatBomb(dt);
     updateMineralField(dt);
+    applyAntiGravityField(dt);
     handlePlayerShotCollisions();
     handleEnemyShotCollisions();
     handleUfoAsteroidCollisions();
@@ -4070,7 +4602,11 @@ function drawShip() {
         return;
     }
 
-    if (ship.invulnerable > 0 && Math.floor(ship.invulnerable / 7) % 2 === 0) {
+    const invulnerableBlinkHidden = ship.invulnerable > 0 && Math.floor(ship.invulnerable / 7) % 2 === 0;
+    const powerupExpiryBlinkHidden = shipPowerupWarningBlinkFrames > 0
+        && gameState === "playing"
+        && Math.floor(shipPowerupWarningBlinkFrames / 6) % 2 === 0;
+    if (invulnerableBlinkHidden || powerupExpiryBlinkHidden) {
         return;
     }
 
@@ -4084,6 +4620,28 @@ function drawShip() {
         ctx.beginPath();
         ctx.arc(ship.x, ship.y, ship.radius + 9, 0, Math.PI * 2);
         ctx.stroke();
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = PALETTE.ship;
+    }
+
+    if (hasAntiGravityField()) {
+        const pulse = 0.62 + Math.sin(lastFrameTime * 0.012) * 0.25;
+        const ringRadius = ship.radius + 14 * ship.modelScale;
+        ctx.strokeStyle = PALETTE.antiGravity;
+        ctx.shadowColor = PALETTE.antiGravity;
+        ctx.shadowBlur = 18;
+        ctx.globalAlpha = 0.42 + pulse * 0.28;
+        ctx.lineWidth = 2.4;
+        ctx.beginPath();
+        ctx.arc(ship.x, ship.y, ringRadius, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.globalAlpha = 0.2 + pulse * 0.22;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(ship.x, ship.y, ringRadius + 7 * ship.modelScale, 0, Math.PI * 2);
+        ctx.stroke();
+
         ctx.globalAlpha = 1;
         ctx.strokeStyle = PALETTE.ship;
     }
@@ -4404,13 +4962,13 @@ function drawHud() {
     ctx.textBaseline = "top";
 
     ctx.textAlign = "left";
-    ctx.fillText(`SCORE ${String(score).padStart(5, "0")}`, 16, rowOneY);
+    ctx.fillText(`SCORE ${String(score).padStart(HUD_SCORE_DIGITS, "0")}`, 16, rowOneY);
     ctx.fillStyle = PALETTE.hudAccent;
     ctx.fillText(`SHIPS ${Math.max(lives, 0)}`, 16, rowTwoY);
 
     ctx.textAlign = "center";
     ctx.fillStyle = PALETTE.hud;
-    ctx.fillText(`HIGH ${String(highScore).padStart(5, "0")}`, canvas.width / 2, rowOneY);
+    ctx.fillText(`HIGH ${String(highScore).padStart(HUD_SCORE_DIGITS, "0")}`, canvas.width / 2, rowOneY);
 
     ctx.textAlign = "right";
     ctx.fillText(`WAVE ${wave}`, canvas.width - 16, rowOneY);
@@ -4494,6 +5052,30 @@ function drawBonusBanner() {
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(bonusBannerText, canvas.width / 2, y);
+    ctx.restore();
+}
+
+function drawPowerupExpiryBanner() {
+    if (!powerupExpiryWarning || gameState !== "playing") {
+        return;
+    }
+
+    const pulse = 0.72 + Math.sin(lastFrameTime * 0.012) * 0.28;
+    const fontSize = canvas.width < 720 ? 9 : 12;
+    const y = bonusBannerTimer > 0
+        ? canvas.height * 0.3
+        : (comboDisplayTimer > 0 ? canvas.height * 0.24 : canvas.height * 0.2);
+    const secondsText = Math.max(0, powerupExpiryWarning.secondsRemaining).toFixed(1);
+    const label = powerupExpiryWarning.label || "POWER-UP";
+    const text = `${label} ENDS IN ${secondsText}s`;
+
+    ctx.save();
+    ctx.globalAlpha = Math.max(0.35, Math.min(1, pulse));
+    ctx.fillStyle = PALETTE.enemyShot;
+    ctx.font = `${fontSize}px ${HUD_FONT}`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(text, canvas.width / 2, y);
     ctx.restore();
 }
 
@@ -4591,13 +5173,13 @@ function getPausedScreenLines() {
 function getGameOverLines() {
     if (isMobilePhoneUI) {
         return [
-            `FINAL SCORE ${String(score).padStart(5, "0")}`,
+            `FINAL SCORE ${String(score).padStart(HUD_SCORE_DIGITS, "0")}`,
             "TAP FIRE OR THRUST TO PLAY AGAIN"
         ];
     }
 
     return [
-        `FINAL SCORE ${String(score).padStart(5, "0")}`,
+        `FINAL SCORE ${String(score).padStart(HUD_SCORE_DIGITS, "0")}`,
         "ENTER OR SPACE TO PLAY AGAIN",
         "H HELP   S SOUND   M MUSIC"
     ];
@@ -4712,6 +5294,7 @@ function getGodHelpScreenLines() {
         "4 SPAWN MINERAL FIELD",
         "5 SPAWN DECOY PAIR",
         "6 OR B SPAWN TITAN BOSS WAVE",
+        "7 SPAWN ROGUE ASTEROID",
         "U OPEN FULL POWER-UP DRAFT",
         "K CLEAR CURRENT WAVE",
         "L JUMP TO WAVE",
@@ -4896,7 +5479,7 @@ function drawHelpElementsLegend() {
         titleBottom
     );
     const baseLineHeight = canvas.width < 720 ? 21 : 25;
-    const entryCount = 10;
+    const entryCount = 11;
     const bottomPadding = canvas.width < 720 ? 20 : 28;
     const availableHeight = Math.max(80, canvas.height - bottomPadding - minimumStartY);
     const fitLineHeight = Math.floor(availableHeight / Math.max(1, entryCount - 1));
@@ -4918,8 +5501,9 @@ function drawHelpElementsLegend() {
         },
         { draw: () => drawLegendAsteroidIcon(iconX, startY + lineHeight * 6, ASTEROID_COLORWAYS[2].stroke), text: `= MED ASTEROID (${ASTEROID_SCORES[1]} PTS)` },
         { draw: () => drawLegendAsteroidIcon(iconX, startY + lineHeight * 7, ASTEROID_COLORWAYS[4].stroke), text: `= SMALL ASTEROID (${ASTEROID_SCORES[2]} PTS)` },
-        { draw: () => drawLegendBombIcon(iconX, startY + lineHeight * 8), text: `= THREAT BOMB (SHOT FOR ${THREAT_BOMB_SCORE_VALUE} PTS)` },
-        { draw: () => drawLegendMineralIcon(iconX, startY + lineHeight * 9), text: `= MINERAL (+${MINERAL_TOUCH_SCORE} ON TOUCH)` }
+        { draw: () => drawLegendAsteroidIcon(iconX, startY + lineHeight * 8, ROGUE_ASTEROID_COLORWAY.stroke), text: `= ROGUE ASTEROID (+${ROGUE_ASTEROID_SCORE_BONUS} BONUS)` },
+        { draw: () => drawLegendBombIcon(iconX, startY + lineHeight * 9), text: `= THREAT BOMB (SHOT FOR ${THREAT_BOMB_SCORE_VALUE} PTS)` },
+        { draw: () => drawLegendMineralIcon(iconX, startY + lineHeight * 10), text: `= MINERAL (+${MINERAL_TOUCH_SCORE} ON TOUCH)` }
     ];
 
     ctx.save();
@@ -5028,6 +5612,7 @@ function render() {
     drawBossAlert();
     drawComboBanner();
     drawBonusBanner();
+    drawPowerupExpiryBanner();
     drawFlashOverlay();
 
     if (gameState === "waiting") {
@@ -5136,6 +5721,7 @@ function handleKeyDown(event) {
     const isDebugMineralSpawn = event.code === "Digit4" || event.code === "Numpad4";
     const isDebugDecoySpawn = event.code === "Digit5" || event.code === "Numpad5";
     const isDebugTitanSpawn = event.code === "Digit6" || event.code === "Numpad6" || event.code === "KeyB" || pressedKey === "b";
+    const isDebugRogueSpawn = event.code === "Digit7" || event.code === "Numpad7";
     const isDebugUpgradeDraft = event.code === "KeyU" || pressedKey === "u";
     const isDebugWaveJump = event.code === "KeyL" || pressedKey === "l";
     const isDebugWaveClear = event.code === "KeyK" || pressedKey === "k";
@@ -5243,6 +5829,10 @@ function handleKeyDown(event) {
         }
         if (isDebugDecoySpawn) {
             spawnDebugDecoys();
+            return;
+        }
+        if (isDebugRogueSpawn) {
+            spawnDebugRogueAsteroid();
             return;
         }
         if (isDebugUpgradeDraft) {

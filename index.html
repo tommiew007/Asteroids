@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Classic Asteroids | Tom Wellborn</title>
+    <meta name="description" content="A browser-based Asteroids homage with arcade controls, wave progression, UFO encounters, and classic vector-inspired visuals.">
+    <meta property="og:title" content="Classic Asteroids">
+    <meta property="og:description" content="Pilot a vector-style ship, blast apart asteroids, and survive escalating waves in this browser-based Asteroids homage.">
+    <meta property="og:image" content="preview.png">
+    <meta property="og:url" content="https://tommiew007.github.io/Asteroids/">
+    <meta property="og:type" content="website">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Classic Asteroids">
+    <meta name="twitter:description" content="Pilot a vector-style ship, blast apart asteroids, and survive escalating waves in this browser-based Asteroids homage.">
+    <meta name="twitter:image" content="preview.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            height: 100%;
+            background: #000;
+            color: #fff;
+            touch-action: none;
+        }
+        body {
+            position: relative;
+            font-family: "Press Start 2P", monospace;
+        }
+        canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+            background: black;
+            touch-action: none;
+        }
+        #mobileControls {
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: none;
+            align-items: flex-end;
+            justify-content: space-between;
+            padding: 20px;
+            padding-bottom: calc(20px + env(safe-area-inset-bottom));
+            pointer-events: none;
+            z-index: 10;
+        }
+        #mobileControls[data-visible="true"] {
+            display: flex;
+        }
+        .mobile-cluster {
+            display: flex;
+            gap: 12px;
+            pointer-events: auto;
+        }
+        .control-btn {
+            width: 76px;
+            height: 76px;
+            border: 2px solid rgba(255, 255, 255, 0.82);
+            border-radius: 18px;
+            background: rgba(0, 0, 0, 0.58);
+            color: #fff;
+            font: 10px "Press Start 2P", monospace;
+            text-transform: uppercase;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none;
+            box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08) inset;
+        }
+        .control-btn[data-active="true"] {
+            border-color: #f8b36b;
+            color: #f8b36b;
+            background: rgba(248, 179, 107, 0.18);
+        }
+        #mobilePause {
+            position: fixed;
+            top: 16px;
+            right: 16px;
+            width: 64px;
+            height: 64px;
+            display: none;
+            z-index: 11;
+            padding-top: 4px;
+            padding-right: 0;
+            padding-bottom: 0;
+            padding-left: 0;
+        }
+        #mobilePause[data-visible="true"] {
+            display: flex;
+        }
+        #mobileStart {
+            position: fixed;
+            left: 50%;
+            bottom: calc(26px + env(safe-area-inset-bottom));
+            transform: translateX(-50%);
+            display: none;
+            min-width: 144px;
+            height: 58px;
+            z-index: 11;
+            padding: 0 18px;
+            border-color: rgba(248, 179, 107, 0.9);
+            color: #f8b36b;
+            background: rgba(12, 18, 34, 0.74);
+        }
+        #mobileStart[data-visible="true"] {
+            display: flex;
+        }
+        #aboutButton {
+            position: fixed;
+            top: 16px;
+            left: 16px;
+            display: none;
+            width: auto;
+            min-width: 78px;
+            height: 48px;
+            z-index: 11;
+            padding: 0 14px;
+        }
+        #aboutButton[data-visible="true"] {
+            display: flex;
+        }
+        #aboutOverlay {
+            position: fixed;
+            inset: 0;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            background: rgba(0, 0, 0, 0.72);
+            z-index: 21;
+        }
+        #aboutOverlay[data-visible="true"] {
+            display: flex;
+        }
+        .about-panel {
+            width: min(720px, 100%);
+            border: 2px solid rgba(255, 255, 255, 0.8);
+            background: rgba(0, 0, 0, 0.92);
+            padding: 24px;
+            text-align: center;
+            box-shadow: 0 0 40px rgba(126, 231, 255, 0.12);
+        }
+        .about-text {
+            color: #8be9fd;
+            font-size: 16px;
+            line-height: 1.8;
+        }
+        .about-links {
+            margin-top: 18px;
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .about-link {
+            width: auto;
+            min-width: 138px;
+            height: 48px;
+            padding: 0 14px;
+            text-decoration: none;
+        }
+        .about-close {
+            margin: 24px auto 0;
+            width: auto;
+            min-width: 120px;
+            height: 52px;
+            padding: 0 18px;
+        }
+        #upgradeOverlay {
+            position: fixed;
+            inset: 0;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            background: rgba(0, 0, 0, 0.72);
+            z-index: 20;
+        }
+        #upgradeOverlay[data-visible="true"] {
+            display: flex;
+        }
+        .upgrade-panel {
+            width: min(980px, 100%);
+            border: 2px solid rgba(255, 255, 255, 0.8);
+            background: rgba(0, 0, 0, 0.92);
+            padding: 24px;
+            box-shadow: 0 0 40px rgba(248, 179, 107, 0.12);
+        }
+        .upgrade-title {
+            font-size: 18px;
+            text-align: center;
+            color: #f8b36b;
+        }
+        .upgrade-subtitle {
+            margin-top: 14px;
+            font-size: 10px;
+            text-align: center;
+            color: rgba(255, 255, 255, 0.8);
+        }
+        .upgrade-choices {
+            margin-top: 20px;
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 16px;
+        }
+        .upgrade-card {
+            border: 2px solid rgba(255, 255, 255, 0.45);
+            background: rgba(255, 255, 255, 0.04);
+            color: #fff;
+            padding: 18px 16px;
+            text-align: left;
+            font: 10px "Press Start 2P", monospace;
+            line-height: 1.7;
+            cursor: pointer;
+            touch-action: manipulation;
+        }
+        .upgrade-card:hover,
+        .upgrade-card:focus-visible {
+            border-color: #f8b36b;
+            outline: none;
+            background: rgba(248, 179, 107, 0.12);
+        }
+        .upgrade-index {
+            display: inline-block;
+            margin-bottom: 10px;
+            color: #f8b36b;
+        }
+        .upgrade-name {
+            font-size: 11px;
+            margin-bottom: 10px;
+        }
+        .upgrade-desc {
+            color: rgba(255, 255, 255, 0.82);
+        }
+        @media (pointer: coarse) and (min-width: 700px) {
+            #mobileControls {
+                padding: 28px;
+                padding-bottom: calc(28px + env(safe-area-inset-bottom));
+            }
+            .mobile-cluster {
+                gap: 16px;
+            }
+            .control-btn {
+                width: 90px;
+                height: 90px;
+                border-radius: 22px;
+                font-size: 11px;
+            }
+            #mobilePause {
+                top: 20px;
+                right: 20px;
+                width: 76px;
+                height: 76px;
+            }
+            #mobileStart {
+                min-width: 166px;
+                height: 64px;
+                font-size: 11px;
+            }
+            #aboutButton {
+                top: 20px;
+                left: 20px;
+                min-width: 98px;
+                height: 56px;
+                padding: 0 16px;
+                font-size: 10px;
+            }
+        }
+        @media (pointer: coarse) and (max-height: 560px) {
+            #mobileControls {
+                padding: 12px;
+                padding-bottom: calc(12px + env(safe-area-inset-bottom));
+            }
+            .mobile-cluster {
+                gap: 8px;
+            }
+            .control-btn {
+                width: 62px;
+                height: 62px;
+                border-radius: 14px;
+                font-size: 8px;
+            }
+            #mobilePause {
+                top: 10px;
+                right: 10px;
+                width: 52px;
+                height: 52px;
+            }
+            #mobileStart {
+                bottom: calc(12px + env(safe-area-inset-bottom));
+                min-width: 116px;
+                height: 44px;
+                font-size: 8px;
+            }
+            #aboutButton {
+                top: 10px;
+                left: 10px;
+                min-width: 64px;
+                height: 38px;
+                padding: 0 8px;
+                font-size: 7px;
+            }
+        }
+        @media (max-width: 480px) {
+            #mobileControls {
+                padding: 14px;
+                padding-bottom: calc(14px + env(safe-area-inset-bottom));
+            }
+            .mobile-cluster {
+                gap: 10px;
+            }
+            .control-btn {
+                width: 68px;
+                height: 68px;
+                border-radius: 16px;
+                font-size: 9px;
+            }
+            #mobilePause {
+                top: 12px;
+                right: 12px;
+                width: 56px;
+                height: 56px;
+            }
+            #mobileStart {
+                bottom: calc(14px + env(safe-area-inset-bottom));
+                min-width: 124px;
+                height: 46px;
+                font-size: 9px;
+            }
+            #aboutButton {
+                top: 12px;
+                left: 12px;
+                min-width: 68px;
+                height: 42px;
+                padding: 0 10px;
+                font-size: 8px;
+            }
+            #aboutOverlay {
+                padding: 12px;
+            }
+            .about-panel {
+                padding: 18px 16px;
+            }
+            .about-text {
+                font-size: 11px;
+                line-height: 1.9;
+            }
+            .about-link {
+                min-width: 106px;
+                height: 42px;
+                font-size: 8px;
+            }
+            .about-close {
+                min-width: 110px;
+                height: 46px;
+            }
+            #upgradeOverlay {
+                padding: 12px;
+            }
+            .upgrade-panel {
+                padding: 16px;
+            }
+            .upgrade-title {
+                font-size: 14px;
+            }
+            .upgrade-subtitle {
+                margin-top: 10px;
+                font-size: 8px;
+                line-height: 1.6;
+            }
+            .upgrade-choices {
+                grid-template-columns: 1fr;
+                gap: 10px;
+            }
+            .upgrade-card {
+                padding: 14px 12px;
+                font-size: 8px;
+            }
+            .upgrade-name {
+                font-size: 9px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas" aria-label="Classic Asteroids game"></canvas>
+    <button id="aboutButton" class="control-btn" type="button" aria-label="About game">About</button>
+    <div id="aboutOverlay" data-visible="false" aria-hidden="true">
+        <div class="about-panel">
+                <div id="aboutText" class="about-text">Classic Asteroids HTML5 by Tom Wellborn 2026 v1.049</div>
+            <div class="about-links">
+                <a id="aboutCodebaseLink" class="control-btn about-link" href="https://github.com/tommiew007/Asteroids" target="_blank" rel="noopener noreferrer">Codebase</a>
+                <a id="aboutWikiLink" class="control-btn about-link" href="https://github.com/tommiew007/Asteroids/wiki" target="_blank" rel="noopener noreferrer">Wiki</a>
+                <a id="aboutMilkyWayLink" class="control-btn about-link" href="https://commons.wikimedia.org/wiki/File:ESO_-_Milky_Way.jpg" target="_blank" rel="noopener noreferrer">Milky Way Credit</a>
+            </div>
+            <button id="aboutClose" class="control-btn about-close" type="button" aria-label="Close about">Close</button>
+        </div>
+    </div>
+    <div id="upgradeOverlay" data-visible="false" aria-hidden="true">
+        <div class="upgrade-panel">
+            <div class="upgrade-title">Choose Upgrade</div>
+            <div id="upgradeSubtitle" class="upgrade-subtitle">Pick one to reshape the run. Keyboard: 1-9 or tap a card.</div>
+            <div id="upgradeChoices" class="upgrade-choices"></div>
+        </div>
+    </div>
+    <button id="mobileStart" class="control-btn" type="button" aria-label="Start game">Start</button>
+    <button id="mobilePause" class="control-btn" type="button" aria-label="Pause game">II</button>
+    <div id="mobileControls" data-visible="false" aria-hidden="true">
+        <div class="mobile-cluster">
+            <button class="control-btn" type="button" data-control="left" aria-label="Rotate left">Left</button>
+            <button class="control-btn" type="button" data-control="right" aria-label="Rotate right">Right</button>
+        </div>
+        <div class="mobile-cluster">
+            <button class="control-btn" type="button" data-control="thrust" aria-label="Thrust">Thrust</button>
+            <button class="control-btn" type="button" data-control="hyperspace" aria-label="Hyperspace">Hyper</button>
+            <button class="control-btn" type="button" data-control="fire" aria-label="Fire">Fire</button>
+        </div>
+    </div>
+    <script src="game.js"></script>
+</body>
+</html>

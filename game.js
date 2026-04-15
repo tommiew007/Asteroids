@@ -34,9 +34,10 @@ const bossImages = {
     large: new Image()
 };
 const milkyWayPhoto = new Image();
+const asteroidSurfacePhotos = [];
 
 const HUD_FONT = "'Press Start 2P', monospace";
-const GAME_VERSION = "1.058";
+const GAME_VERSION = "1.068";
 const ABOUT_CREDIT_TEXT = `Classic Asteroids HTML5 by Tom Wellborn 2026 v${GAME_VERSION}`;
 const ABOUT_CODEBASE_URL = "https://github.com/tommiew007/Asteroids";
 const ABOUT_WIKI_URL = "https://github.com/tommiew007/Asteroids/wiki";
@@ -45,6 +46,7 @@ const STORAGE_KEY = "asteroids-high-score";
 const AUDIO_SETTINGS_KEY = "asteroids-audio-settings";
 const HUD_SCORE_DIGITS = 8;
 const ASTEROID_RADII = [48, 28, 16];
+const DESKTOP_ASTEROID_RADIUS_MULTIPLIER = 1.1;
 const ASTEROID_SCORES = [20, 50, 100];
 const MAX_STARTING_ASTEROIDS = 11;
 const MAX_PLAYER_SHOTS = 4;
@@ -137,7 +139,7 @@ const LARGE_ASTEROID_VISUALS_ON_MOBILE = false;
 const LARGE_ASTEROID_SHADER_DEBUG_MODE = false;
 const LARGE_ASTEROID_TEXTURE_MIN_SIZE = 96;
 const LARGE_ASTEROID_TEXTURE_MAX_SIZE = 196;
-const LARGE_ASTEROID_TEXTURE_REBUILDS_PER_FRAME = 2;
+const LARGE_ASTEROID_TEXTURE_REBUILDS_PER_FRAME = 8;
 const LARGE_ASTEROID_GRAVITY_MAX_STEPS = 16;
 const LARGE_ASTEROID_GRAVITY_PER_LEVEL = 0.0016;
 const LARGE_ASTEROID_GRAVITY_RANGE_MULTIPLIER = 12;
@@ -149,6 +151,7 @@ const SEEKER_ARRAY_DURATION_SECONDS = Math.floor(SEEKER_ARRAY_DURATION_FRAMES / 
 const PLAYER_SHOT_DISTANCE_MULTIPLIER = 2;
 const PLAYER_HOMING_TURN_RATE = 0.055;
 const PLAYER_HOMING_SHOT_SPEED_MULTIPLIER = 0.9;
+const ASTEROID_OVERLAP_IMPACT_CHANCE = 0.15;
 const ROGUE_ASTEROID_CHANCE = 0.05;
 const ROGUE_ASTEROID_SPEED_MULTIPLIER = 4;
 const ROGUE_ASTEROID_SCORE_BONUS = 500;
@@ -162,13 +165,83 @@ const DEFAULT_GAMEPLAY_PROFILE = {
     shotScale: 1
 };
 const ASTEROID_COLORWAYS = [
-    { stroke: "#e0b08a", fill: "rgba(128, 82, 56, 0.2)", glow: "#e0b08a" },
-    { stroke: "#d7a17d", fill: "rgba(119, 71, 49, 0.2)", glow: "#d7a17d" },
-    { stroke: "#c98c68", fill: "rgba(104, 56, 38, 0.22)", glow: "#c98c68" },
-    { stroke: "#b9775c", fill: "rgba(92, 48, 35, 0.22)", glow: "#b9775c" },
-    { stroke: "#a96a4f", fill: "rgba(78, 40, 30, 0.24)", glow: "#a96a4f" },
-    { stroke: "#8f5a45", fill: "rgba(66, 34, 27, 0.24)", glow: "#8f5a45" }
+    { stroke: "#d4d9df", fill: "rgba(126, 133, 142, 0.24)", glow: "#e4e8ed" },
+    { stroke: "#c6ccd4", fill: "rgba(116, 123, 132, 0.24)", glow: "#d7dde6" },
+    { stroke: "#b6bcc6", fill: "rgba(104, 110, 121, 0.24)", glow: "#c8cfd9" },
+    { stroke: "#a8aeb8", fill: "rgba(94, 100, 112, 0.24)", glow: "#bcc3ce" },
+    { stroke: "#b49f93", fill: "rgba(106, 83, 72, 0.24)", glow: "#c7b2a5" },
+    { stroke: "#be927d", fill: "rgba(112, 76, 61, 0.24)", glow: "#d1a58f" },
+    { stroke: "#c98c68", fill: "rgba(104, 56, 38, 0.24)", glow: "#daa07f" },
+    { stroke: "#b9775c", fill: "rgba(92, 48, 35, 0.24)", glow: "#c98b74" },
+    { stroke: "#a96a4f", fill: "rgba(78, 40, 30, 0.25)", glow: "#bc8068" },
+    { stroke: "#8f5a45", fill: "rgba(66, 34, 27, 0.25)", glow: "#a66f58" }
 ];
+const ASTEROID_SURFACE_SOURCES = [
+    {
+        id: "bennu",
+        src: "assets/surfaces/bennu-surface.jpg",
+        crop: { x: 0.06, y: 0.08, w: 0.88, h: 0.84 }
+    },
+    {
+        id: "vesta",
+        src: "assets/surfaces/vesta-surface.jpg",
+        crop: { x: 0.12, y: 0.2, w: 0.76, h: 0.66 }
+    },
+    {
+        id: "psyche",
+        src: "assets/surfaces/psyche-surface.jpg",
+        crop: { x: 0.16, y: 0.2, w: 0.68, h: 0.64 }
+    },
+    {
+        id: "eros",
+        src: "assets/surfaces/eros-surface.jpg",
+        crop: { x: 0.0, y: 0.0, w: 0.84, h: 0.64 }
+    }
+];
+const ASTEROID_TEXTURE_COLLECTION_BY_SIZE = [
+    {
+        // Large asteroid texture (collection A)
+        highlight: "rgba(255, 244, 220, 0.5)",
+        mid: "rgba(154, 114, 88, 0.6)",
+        shadow: "rgba(26, 15, 10, 0.44)",
+        contrastLight: "rgba(255, 238, 210, 0.2)",
+        contrastDark: "rgba(14, 9, 6, 0.18)",
+        grainLight: "rgba(255, 226, 196, 0.16)",
+        grainDark: "rgba(28, 14, 10, 0.17)",
+        grainCount: 84
+    },
+    {
+        // Medium asteroid texture (collection B)
+        highlight: "rgba(236, 242, 255, 0.44)",
+        mid: "rgba(132, 134, 158, 0.6)",
+        shadow: "rgba(18, 18, 30, 0.43)",
+        contrastLight: "rgba(232, 238, 255, 0.18)",
+        contrastDark: "rgba(10, 10, 20, 0.2)",
+        grainLight: "rgba(220, 228, 255, 0.14)",
+        grainDark: "rgba(16, 16, 26, 0.18)",
+        grainCount: 68
+    },
+    {
+        // Small asteroid texture (collection C)
+        highlight: "rgba(237, 255, 233, 0.43)",
+        mid: "rgba(122, 152, 118, 0.58)",
+        shadow: "rgba(16, 26, 14, 0.4)",
+        contrastLight: "rgba(228, 255, 218, 0.16)",
+        contrastDark: "rgba(10, 18, 10, 0.2)",
+        grainLight: "rgba(228, 255, 214, 0.14)",
+        grainDark: "rgba(14, 24, 12, 0.18)",
+        grainCount: 54
+    }
+];
+for (const source of ASTEROID_SURFACE_SOURCES) {
+    asteroidSurfacePhotos.push({
+        id: source.id,
+        src: source.src,
+        crop: source.crop,
+        image: new Image(),
+        ready: false
+    });
+}
 const ROGUE_ASTEROID_COLORWAY = {
     stroke: "#dd8d68",
     fill: "rgba(114, 46, 36, 0.33)",
@@ -311,6 +384,19 @@ milkyWayPhoto.addEventListener("error", () => {
     milkyWayPhotoReady = false;
 });
 setSafeImageSource(milkyWayPhoto, "assets/milky-way.jpg", "milky way");
+for (const surface of asteroidSurfacePhotos) {
+    surface.image.decoding = "async";
+    surface.image.addEventListener("load", () => {
+        surface.ready = true;
+        for (const asteroid of asteroids) {
+            asteroid.largeVisualTextureDirty = true;
+        }
+    });
+    surface.image.addEventListener("error", () => {
+        surface.ready = false;
+    });
+    setSafeImageSource(surface.image, surface.src, `asteroid surface ${surface.id}`);
+}
 
 const keys = {
     left: false,
@@ -384,7 +470,9 @@ let powerupExpiryWarning = null;
 let shipPowerupWarningBlinkFrames = 0;
 let titanPulseTimer = 0;
 let titanChildBatchSerial = 0;
+let asteroidSerial = 0;
 let activeTitanChildBatchIds = new Set();
+let activeAsteroidOverlapPairs = new Set();
 let godModeEnabled = false;
 let gravityDebugWaveFloor = 0;
 let soundEnabled = true;
@@ -1951,6 +2039,7 @@ function createShip(invulnerableFrames = SHIP_INVULNERABLE_FRAMES) {
 
 function resizeCanvas() {
     const previousProfile = { ...gameplayProfile };
+    const previousIsMobilePhoneUI = isMobilePhoneUI;
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
     ctx.imageSmoothingEnabled = false;
@@ -1966,7 +2055,7 @@ function resizeCanvas() {
         if (gameState === "waiting" || gameState === "gameOver") {
             ship = createShip(0);
         } else {
-            applyGameplayProfile(previousProfile, gameplayProfile);
+            applyGameplayProfile(previousProfile, gameplayProfile, previousIsMobilePhoneUI, isMobilePhoneUI);
         }
     }
 
@@ -2004,6 +2093,10 @@ function detectMobilePhoneUI() {
     return hasCoarsePointer && (hasMobileUserAgent || phoneSizedViewport || tabletSizedViewport);
 }
 
+function getAsteroidRadiusMultiplier(useMobileProfile = isMobilePhoneUI) {
+    return useMobileProfile ? 1 : DESKTOP_ASTEROID_RADIUS_MULTIPLIER;
+}
+
 function buildGameplayProfile() {
     if (!isMobilePhoneUI) {
         return { ...DEFAULT_GAMEPLAY_PROFILE };
@@ -2038,8 +2131,12 @@ function buildGameplayProfile() {
     };
 }
 
-function applyGameplayProfile(previousProfile, nextProfile) {
+function applyGameplayProfile(previousProfile, nextProfile, previousIsMobileProfile = isMobilePhoneUI, nextIsMobileProfile = isMobilePhoneUI) {
     const radiusRatio = nextProfile.entityScale / previousProfile.entityScale;
+    const asteroidRadiusRatio = (
+        (nextProfile.entityScale * getAsteroidRadiusMultiplier(nextIsMobileProfile))
+        / (previousProfile.entityScale * getAsteroidRadiusMultiplier(previousIsMobileProfile))
+    );
     const movementRatio = nextProfile.movementScale / previousProfile.movementScale;
     const shotRatio = nextProfile.shotScale / previousProfile.shotScale;
 
@@ -2051,16 +2148,14 @@ function applyGameplayProfile(previousProfile, nextProfile) {
     ship.vy *= movementRatio;
 
     for (const asteroid of asteroids) {
-        asteroid.radius *= radiusRatio;
+        asteroid.radius *= asteroidRadiusRatio;
         asteroid.vx *= movementRatio;
         asteroid.vy *= movementRatio;
         asteroid.points = asteroid.points.map((point) => ({
-            x: point.x * radiusRatio,
-            y: point.y * radiusRatio
+            x: point.x * asteroidRadiusRatio,
+            y: point.y * asteroidRadiusRatio
         }));
-        if (asteroid.sizeIndex === 0) {
-            asteroid.largeVisualTextureDirty = true;
-        }
+        asteroid.largeVisualTextureDirty = true;
     }
 
     for (const ufo of ufos) {
@@ -2237,6 +2332,8 @@ function startGame() {
     shipPowerupWarningBlinkFrames = 0;
     titanPulseTimer = 0;
     resetTitanChildTracking();
+    asteroidSerial = 0;
+    activeAsteroidOverlapPairs.clear();
     autoPausedForFocusLoss = false;
     resetCombatMomentum();
     asteroids = [];
@@ -2428,12 +2525,18 @@ function generateOffscreenPosition(radius) {
 }
 
 function generateAsteroidShape(radius) {
-    const pointCount = 10;
+    const pointCount = 16;
     const points = [];
+    const phaseA = Math.random() * Math.PI * 2;
+    const phaseB = Math.random() * Math.PI * 2;
 
     for (let index = 0; index < pointCount; index += 1) {
         const angle = (Math.PI * 2 * index) / pointCount;
-        const distance = radius * randomBetween(0.75, 1.18);
+        const primaryWave = Math.sin(angle * 2 + phaseA) * 0.05;
+        const secondaryWave = Math.sin(angle * 3 + phaseB) * 0.025;
+        const grain = randomBetween(-0.018, 0.018);
+        const surfaceOffset = primaryWave + secondaryWave + grain;
+        const distance = radius * Math.max(0.88, Math.min(1.12, 1 + surfaceOffset));
         points.push({
             x: Math.cos(angle) * distance,
             y: Math.sin(angle) * distance
@@ -2456,10 +2559,36 @@ function canUseLargeAsteroidVisuals() {
     return LARGE_ASTEROID_VISUALS_ENABLED && (!isMobilePhoneUI || LARGE_ASTEROID_VISUALS_ON_MOBILE);
 }
 
+function getAsteroidTextureCollectionStyle(sizeIndex) {
+    if (Number.isFinite(sizeIndex) && sizeIndex >= 0 && sizeIndex < ASTEROID_TEXTURE_COLLECTION_BY_SIZE.length) {
+        return ASTEROID_TEXTURE_COLLECTION_BY_SIZE[sizeIndex];
+    }
+    return ASTEROID_TEXTURE_COLLECTION_BY_SIZE[0];
+}
+
+function getAsteroidSurfaceTexture(index) {
+    if (!Number.isFinite(index) || asteroidSurfacePhotos.length === 0) {
+        return null;
+    }
+    const normalizedIndex = Math.max(0, Math.min(asteroidSurfacePhotos.length - 1, Math.floor(index)));
+    const surface = asteroidSurfacePhotos[normalizedIndex];
+    if (!surface || !surface.ready || !surface.image.naturalWidth || !surface.image.naturalHeight) {
+        return null;
+    }
+    return surface;
+}
+
 function buildLargeAsteroidTexture(asteroid) {
+    const isLargeAsteroid = asteroid.sizeIndex === 0;
+    const minTextureSize = isLargeAsteroid
+        ? LARGE_ASTEROID_TEXTURE_MIN_SIZE
+        : Math.max(40, Math.round(asteroid.radius * 1.9));
+    const maxTextureSize = isLargeAsteroid
+        ? LARGE_ASTEROID_TEXTURE_MAX_SIZE
+        : Math.max(92, Math.round(asteroid.radius * 2.5));
     const textureSize = Math.max(
-        LARGE_ASTEROID_TEXTURE_MIN_SIZE,
-        Math.min(LARGE_ASTEROID_TEXTURE_MAX_SIZE, Math.round(asteroid.radius * 2.55))
+        minTextureSize,
+        Math.min(maxTextureSize, Math.round(asteroid.radius * 2.55))
     );
     const textureCanvas = document.createElement("canvas");
     textureCanvas.width = textureSize;
@@ -2471,6 +2600,7 @@ function buildLargeAsteroidTexture(asteroid) {
 
     const drawRadius = textureSize * 0.41;
     const scale = drawRadius / asteroid.radius;
+    const textureStyle = getAsteroidTextureCollectionStyle(asteroid.sizeIndex);
     textureCtx.save();
     textureCtx.translate(textureSize / 2, textureSize / 2);
     textureCtx.scale(scale, scale);
@@ -2478,33 +2608,92 @@ function buildLargeAsteroidTexture(asteroid) {
     traceAsteroidPath(textureCtx, asteroid.points);
     textureCtx.clip();
 
-    const bodyGradient = textureCtx.createRadialGradient(
-        -asteroid.radius * 0.28,
-        -asteroid.radius * 0.35,
-        asteroid.radius * 0.18,
-        asteroid.radius * 0.05,
-        asteroid.radius * 0.12,
-        asteroid.radius * 1.35
+    // Opaque base coat prevents visual see-through when asteroids overlap.
+    textureCtx.fillStyle = asteroid.solidFillColor || "rgb(104, 84, 70)";
+    textureCtx.fillRect(-asteroid.radius * 1.6, -asteroid.radius * 1.6, asteroid.radius * 3.2, asteroid.radius * 3.2);
+
+    const sampledSurface = getAsteroidSurfaceTexture(asteroid.surfaceTextureIndex);
+    if (sampledSurface) {
+        const image = sampledSurface.image;
+        const crop = sampledSurface.crop || { x: 0, y: 0, w: 1, h: 1 };
+        const sx = Math.max(0, Math.floor(image.naturalWidth * crop.x));
+        const sy = Math.max(0, Math.floor(image.naturalHeight * crop.y));
+        const sw = Math.max(1, Math.floor(image.naturalWidth * crop.w));
+        const sh = Math.max(1, Math.floor(image.naturalHeight * crop.h));
+        textureCtx.imageSmoothingEnabled = true;
+        textureCtx.globalAlpha = 0.98;
+        textureCtx.drawImage(
+            image,
+            sx,
+            sy,
+            sw,
+            sh,
+            -asteroid.radius * 1.55,
+            -asteroid.radius * 1.55,
+            asteroid.radius * 3.1,
+            asteroid.radius * 3.1
+        );
+        textureCtx.globalAlpha = 1;
+
+        const surfaceLight = textureCtx.createRadialGradient(
+            -asteroid.radius * 0.22,
+            -asteroid.radius * 0.32,
+            asteroid.radius * 0.1,
+            asteroid.radius * 0.06,
+            asteroid.radius * 0.1,
+            asteroid.radius * 1.38
+        );
+        surfaceLight.addColorStop(0, "rgba(255, 255, 255, 0.24)");
+        surfaceLight.addColorStop(0.5, "rgba(255, 255, 255, 0.03)");
+        surfaceLight.addColorStop(1, "rgba(0, 0, 0, 0.24)");
+        textureCtx.fillStyle = surfaceLight;
+        textureCtx.fillRect(-asteroid.radius * 1.55, -asteroid.radius * 1.55, asteroid.radius * 3.1, asteroid.radius * 3.1);
+    } else {
+        const bodyGradient = textureCtx.createRadialGradient(
+            -asteroid.radius * 0.28,
+            -asteroid.radius * 0.35,
+            asteroid.radius * 0.18,
+            asteroid.radius * 0.05,
+            asteroid.radius * 0.12,
+            asteroid.radius * 1.35
+        );
+        bodyGradient.addColorStop(0, textureStyle.highlight);
+        bodyGradient.addColorStop(0.5, textureStyle.mid);
+        bodyGradient.addColorStop(1, textureStyle.shadow);
+        textureCtx.fillStyle = bodyGradient;
+        textureCtx.fillRect(-asteroid.radius * 1.55, -asteroid.radius * 1.55, asteroid.radius * 3.1, asteroid.radius * 3.1);
+    }
+
+    const contrastSweep = textureCtx.createLinearGradient(
+        -asteroid.radius * 1.1,
+        -asteroid.radius * 1.1,
+        asteroid.radius * 1.15,
+        asteroid.radius * 1.15
     );
-    bodyGradient.addColorStop(0, "rgba(255, 235, 206, 0.28)");
-    bodyGradient.addColorStop(0.56, asteroid.fillColor);
-    bodyGradient.addColorStop(1, "rgba(30, 18, 12, 0.58)");
-    textureCtx.fillStyle = bodyGradient;
+    contrastSweep.addColorStop(0, textureStyle.contrastLight);
+    contrastSweep.addColorStop(0.45, "rgba(255, 255, 255, 0)");
+    contrastSweep.addColorStop(1, textureStyle.contrastDark);
+    textureCtx.fillStyle = contrastSweep;
     textureCtx.fillRect(-asteroid.radius * 1.55, -asteroid.radius * 1.55, asteroid.radius * 3.1, asteroid.radius * 3.1);
 
-    for (let index = 0; index < 72; index += 1) {
+    for (let index = 0; index < textureStyle.grainCount; index += 1) {
         const angle = Math.random() * Math.PI * 2;
         const distance = Math.sqrt(Math.random()) * asteroid.radius * 0.98;
         const x = Math.cos(angle) * distance;
         const y = Math.sin(angle) * distance;
         const grainRadius = randomBetween(asteroid.radius * 0.03, asteroid.radius * 0.095);
         textureCtx.fillStyle = index % 2 === 0
-            ? "rgba(255, 224, 196, 0.08)"
-            : "rgba(35, 18, 12, 0.12)";
+            ? textureStyle.grainLight
+            : textureStyle.grainDark;
         textureCtx.beginPath();
         textureCtx.arc(x, y, grainRadius, 0, Math.PI * 2);
         textureCtx.fill();
     }
+
+    // Tint each generated texture with its asteroid colorway so every spawn
+    // lands on a unique gray-to-reddish-brown look.
+    textureCtx.fillStyle = asteroid.fillColor;
+    textureCtx.fillRect(-asteroid.radius * 1.55, -asteroid.radius * 1.55, asteroid.radius * 3.1, asteroid.radius * 3.1);
 
     if (LARGE_ASTEROID_SHADER_DEBUG_MODE) {
         textureCtx.lineWidth = Math.max(0.8, asteroid.radius * 0.035);
@@ -2526,16 +2715,6 @@ function buildLargeAsteroidTexture(asteroid) {
     }
 
     textureCtx.restore();
-    textureCtx.save();
-    textureCtx.translate(textureSize / 2, textureSize / 2);
-    textureCtx.scale(scale, scale);
-    textureCtx.lineWidth = asteroid.elite ? 3.4 : 2.4;
-    textureCtx.strokeStyle = asteroid.strokeColor;
-    textureCtx.shadowColor = asteroid.glowColor;
-    textureCtx.shadowBlur = asteroid.elite ? 16 : 10;
-    traceAsteroidPath(textureCtx, asteroid.points);
-    textureCtx.stroke();
-    textureCtx.restore();
 
     return {
         canvas: textureCanvas,
@@ -2544,7 +2723,7 @@ function buildLargeAsteroidTexture(asteroid) {
 }
 
 function ensureLargeAsteroidTexture(asteroid) {
-    if (!canUseLargeAsteroidVisuals() || asteroid.sizeIndex !== 0) {
+    if (!canUseLargeAsteroidVisuals()) {
         return false;
     }
 
@@ -2572,8 +2751,24 @@ function pickRandomAsteroidColorway() {
     return ASTEROID_COLORWAYS[Math.floor(Math.random() * ASTEROID_COLORWAYS.length)];
 }
 
+function getOpaqueColorFromFill(fillColor, fallback = "rgb(104, 84, 70)") {
+    if (typeof fillColor !== "string") {
+        return fallback;
+    }
+
+    const match = fillColor.match(/^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)/i);
+    if (!match) {
+        return fallback;
+    }
+
+    const red = Math.max(0, Math.min(255, Math.round(Number.parseFloat(match[1]))));
+    const green = Math.max(0, Math.min(255, Math.round(Number.parseFloat(match[2]))));
+    const blue = Math.max(0, Math.min(255, Math.round(Number.parseFloat(match[3]))));
+    return `rgb(${red}, ${green}, ${blue})`;
+}
+
 function createAsteroid(sizeIndex = 0, x, y, angle, inheritedSpeed, options = {}) {
-    const radius = ASTEROID_RADII[sizeIndex] * gameplayProfile.entityScale;
+    const radius = ASTEROID_RADII[sizeIndex] * gameplayProfile.entityScale * getAsteroidRadiusMultiplier();
     const position = Number.isFinite(x) && Number.isFinite(y)
         ? { x, y }
         : generateOffscreenPosition(radius);
@@ -2588,8 +2783,12 @@ function createAsteroid(sizeIndex = 0, x, y, angle, inheritedSpeed, options = {}
         : (isRogue ? Infinity : baseSpeed * NON_ROGUE_ASTEROID_MAX_SPEED_MULTIPLIER);
     const elite = Boolean(options.elite);
     const colorway = options.colorway || pickRandomAsteroidColorway();
+    const surfaceTextureIndex = Number.isFinite(options.surfaceTextureIndex)
+        ? Math.max(0, Math.min(asteroidSurfacePhotos.length - 1, Math.floor(options.surfaceTextureIndex)))
+        : Math.floor(Math.random() * asteroidSurfacePhotos.length);
 
     return {
+        id: ++asteroidSerial,
         x: position.x,
         y: position.y,
         vx: Math.cos(direction) * speed,
@@ -2599,13 +2798,15 @@ function createAsteroid(sizeIndex = 0, x, y, angle, inheritedSpeed, options = {}
         angle: Math.random() * Math.PI * 2,
         rotation: randomBetween(-0.03, 0.03),
         points: generateAsteroidShape(radius),
+        surfaceTextureIndex,
         colorway,
         strokeColor: colorway.stroke,
         fillColor: colorway.fill,
+        solidFillColor: getOpaqueColorFromFill(colorway.fill),
         glowColor: colorway.glow,
         largeVisualTexture: null,
         largeVisualTextureSize: 0,
-        largeVisualTextureDirty: sizeIndex === 0,
+        largeVisualTextureDirty: true,
         elite,
         rogue: isRogue,
         baseSpeed,
@@ -2992,7 +3193,7 @@ function spawnDebugRogueAsteroid() {
     }
 
     const sizeIndex = Math.random() < 0.5 ? 1 : 2;
-    const radius = ASTEROID_RADII[sizeIndex] * gameplayProfile.entityScale;
+    const radius = ASTEROID_RADII[sizeIndex] * gameplayProfile.entityScale * getAsteroidRadiusMultiplier();
     const spawnPosition = generateOffscreenPosition(radius);
     const heading = Math.atan2(
         canvas.height * 0.5 - spawnPosition.y,
@@ -3183,6 +3384,88 @@ function distanceSquared(a, b) {
 function circlesOverlap(a, b) {
     const radius = a.radius + b.radius;
     return distanceSquared(a, b) <= radius * radius;
+}
+
+function getAsteroidPairKey(firstAsteroid, secondAsteroid) {
+    if (firstAsteroid.id < secondAsteroid.id) {
+        return `${firstAsteroid.id}:${secondAsteroid.id}`;
+    }
+    return `${secondAsteroid.id}:${firstAsteroid.id}`;
+}
+
+function handleAsteroidOverlapImpacts() {
+    if (asteroids.length < 2) {
+        activeAsteroidOverlapPairs.clear();
+        return;
+    }
+
+    const nextOverlapPairs = new Set();
+    const impactedIndices = new Set();
+    const impactAngles = new Map();
+
+    for (let firstIndex = 0; firstIndex < asteroids.length - 1; firstIndex += 1) {
+        const firstAsteroid = asteroids[firstIndex];
+        if (!firstAsteroid || firstAsteroid.isTitan) {
+            continue;
+        }
+
+        for (let secondIndex = firstIndex + 1; secondIndex < asteroids.length; secondIndex += 1) {
+            const secondAsteroid = asteroids[secondIndex];
+            if (!secondAsteroid || secondAsteroid.isTitan) {
+                continue;
+            }
+
+            if (!circlesOverlap(firstAsteroid, secondAsteroid)) {
+                continue;
+            }
+
+            const pairKey = getAsteroidPairKey(firstAsteroid, secondAsteroid);
+            nextOverlapPairs.add(pairKey);
+            if (activeAsteroidOverlapPairs.has(pairKey)) {
+                continue;
+            }
+
+            if (Math.random() >= ASTEROID_OVERLAP_IMPACT_CHANCE) {
+                continue;
+            }
+
+            impactedIndices.add(firstIndex);
+            impactedIndices.add(secondIndex);
+
+            if (!impactAngles.has(firstIndex)) {
+                impactAngles.set(firstIndex, Math.atan2(
+                    secondAsteroid.y - firstAsteroid.y,
+                    secondAsteroid.x - firstAsteroid.x
+                ));
+            }
+            if (!impactAngles.has(secondIndex)) {
+                impactAngles.set(secondIndex, Math.atan2(
+                    firstAsteroid.y - secondAsteroid.y,
+                    firstAsteroid.x - secondAsteroid.x
+                ));
+            }
+        }
+    }
+
+    activeAsteroidOverlapPairs = nextOverlapPairs;
+    if (impactedIndices.size === 0) {
+        return;
+    }
+
+    const destroyOrder = Array.from(impactedIndices).sort((a, b) => b - a);
+    for (const asteroidIndex of destroyOrder) {
+        const asteroid = asteroids[asteroidIndex];
+        if (!asteroid || asteroid.isTitan) {
+            continue;
+        }
+
+        const impactAngle = impactAngles.get(asteroidIndex);
+        const fallbackAngle = Math.atan2(asteroid.vy, asteroid.vx);
+        const splitAngle = Number.isFinite(impactAngle)
+            ? impactAngle
+            : (Number.isFinite(fallbackAngle) ? fallbackAngle : Math.random() * Math.PI * 2);
+        destroyAsteroid(asteroidIndex, splitAngle, false);
+    }
 }
 
 function getWrappedAxisDelta(from, to, span) {
@@ -3710,6 +3993,7 @@ function destroyAsteroid(index, shotAngle, awardPoints = true) {
             asteroids.push(
                 createAsteroid(0, asteroid.x, asteroid.y, fragmentAngle, fragmentSpeed, {
                     colorway: asteroid.colorway,
+                    surfaceTextureIndex: asteroid.surfaceTextureIndex,
                     titanChildBatchId
                 })
             );
@@ -3777,6 +4061,7 @@ function destroyAsteroid(index, shotAngle, awardPoints = true) {
                     durability: asteroid.elite && nextSize === 1 ? 2 : 1,
                     scoreBonus: eliteChildBonus + (isRogueChild ? ROGUE_ASTEROID_SCORE_BONUS : 0),
                     colorway: isRogueChild ? ROGUE_ASTEROID_COLORWAY : asteroid.colorway,
+                    surfaceTextureIndex: asteroid.surfaceTextureIndex,
                     rogue: isRogueChild,
                     titanChildBatchId: destroyedTitanChildBatchId
                 })
@@ -4471,6 +4756,7 @@ function updateGame(dt) {
     updateTimedPowerups(dt);
     updateShip(dt);
     updateAsteroids(dt);
+    handleAsteroidOverlapImpacts();
     updateShotArray(playerShots, dt);
     updateShotArray(enemyShots, dt);
     updateUfos(dt);
@@ -4875,14 +5161,12 @@ function drawAsteroids() {
 
         if (drewLargeTexture && asteroid.largeVisualTexture) {
             const size = asteroid.largeVisualTextureSize;
-            ctx.globalAlpha = asteroid.elite ? 0.98 : 0.94;
-            ctx.shadowColor = asteroid.glowColor;
-            ctx.shadowBlur = asteroid.elite ? 16 : 10;
+            ctx.globalAlpha = 1;
+            ctx.shadowColor = "transparent";
+            ctx.shadowBlur = 0;
+            ctx.filter = "brightness(1.14) contrast(1.12)";
             ctx.drawImage(asteroid.largeVisualTexture, -size / 2, -size / 2, size, size);
-            ctx.globalAlpha = 0.26;
-            ctx.fillStyle = asteroid.fillColor;
-            traceAsteroidPath(ctx, asteroid.points);
-            ctx.fill();
+            ctx.filter = "none";
             if (LARGE_ASTEROID_SHADER_DEBUG_MODE) {
                 const sweep = Math.sin(lastFrameTime * 0.003 + asteroid.x * 0.013 + asteroid.y * 0.009);
                 const highlightAlpha = 0.18 + (sweep + 1) * 0.16;
@@ -4904,12 +5188,8 @@ function drawAsteroids() {
                 ctx.globalCompositeOperation = "source-over";
             }
             ctx.globalAlpha = 1;
-            ctx.strokeStyle = asteroid.strokeColor;
-            ctx.lineWidth = asteroid.elite ? 3 : 2;
-            traceAsteroidPath(ctx, asteroid.points);
-            ctx.stroke();
         } else {
-            ctx.fillStyle = asteroid.fillColor;
+            ctx.fillStyle = asteroid.solidFillColor || asteroid.fillColor;
             ctx.strokeStyle = asteroid.strokeColor;
             ctx.lineWidth = asteroid.elite ? 3 : 2;
             ctx.shadowColor = asteroid.glowColor;

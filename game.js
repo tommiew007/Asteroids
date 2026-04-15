@@ -37,7 +37,7 @@ const milkyWayPhoto = new Image();
 const asteroidSurfacePhotos = [];
 
 const HUD_FONT = "'Press Start 2P', monospace";
-const GAME_VERSION = "1.068";
+const GAME_VERSION = "1.069";
 const ABOUT_CREDIT_TEXT = `Classic Asteroids HTML5 by Tom Wellborn 2026 v${GAME_VERSION}`;
 const ABOUT_CODEBASE_URL = "https://github.com/tommiew007/Asteroids";
 const ABOUT_WIKI_URL = "https://github.com/tommiew007/Asteroids/wiki";
@@ -143,6 +143,7 @@ const LARGE_ASTEROID_TEXTURE_REBUILDS_PER_FRAME = 8;
 const LARGE_ASTEROID_GRAVITY_MAX_STEPS = 16;
 const LARGE_ASTEROID_GRAVITY_PER_LEVEL = 0.0016;
 const LARGE_ASTEROID_GRAVITY_RANGE_MULTIPLIER = 12;
+const GLOBAL_GRAVITY_INTENSITY_SCALE = 15 / 16;
 const POWERUP_DURATION_FRAMES = 30 * 60;
 const POWERUP_DURATION_SECONDS = Math.floor(POWERUP_DURATION_FRAMES / 60);
 const POWERUP_EXPIRY_WARNING_FRAMES = 3 * 60;
@@ -3666,7 +3667,10 @@ function applyLargeAsteroidGravity(dt) {
     }
 
     const effectiveGravitySteps = getEffectiveGravitySteps();
-    const gravityStrength = effectiveGravitySteps * LARGE_ASTEROID_GRAVITY_PER_LEVEL * gameplayProfile.movementScale;
+    const gravityStrength = effectiveGravitySteps
+        * LARGE_ASTEROID_GRAVITY_PER_LEVEL
+        * gameplayProfile.movementScale
+        * GLOBAL_GRAVITY_INTENSITY_SCALE;
 
     for (const asteroid of asteroids) {
         if (asteroid.sizeIndex !== 0) {
@@ -3674,7 +3678,7 @@ function applyLargeAsteroidGravity(dt) {
         }
 
         const customGravityStrength = asteroid.isTitan
-            ? asteroid.titanGravityStrength * gameplayProfile.movementScale
+            ? asteroid.titanGravityStrength * gameplayProfile.movementScale * GLOBAL_GRAVITY_INTENSITY_SCALE
             : gravityStrength;
         if (customGravityStrength <= 0) {
             continue;

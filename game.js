@@ -36,7 +36,7 @@ const bossImages = {
 const milkyWayPhoto = new Image();
 
 const HUD_FONT = "'Press Start 2P', monospace";
-const GAME_VERSION = "1.056";
+const GAME_VERSION = "1.058";
 const ABOUT_CREDIT_TEXT = `Classic Asteroids HTML5 by Tom Wellborn 2026 v${GAME_VERSION}`;
 const ABOUT_CODEBASE_URL = "https://github.com/tommiew007/Asteroids";
 const ABOUT_WIKI_URL = "https://github.com/tommiew007/Asteroids/wiki";
@@ -141,7 +141,7 @@ const LARGE_ASTEROID_TEXTURE_REBUILDS_PER_FRAME = 2;
 const LARGE_ASTEROID_GRAVITY_MAX_STEPS = 16;
 const LARGE_ASTEROID_GRAVITY_PER_LEVEL = 0.0016;
 const LARGE_ASTEROID_GRAVITY_RANGE_MULTIPLIER = 12;
-const POWERUP_DURATION_FRAMES = 60 * 60;
+const POWERUP_DURATION_FRAMES = 30 * 60;
 const POWERUP_DURATION_SECONDS = Math.floor(POWERUP_DURATION_FRAMES / 60);
 const POWERUP_EXPIRY_WARNING_FRAMES = 3 * 60;
 const SEEKER_ARRAY_DURATION_FRAMES = 10 * 60;
@@ -225,6 +225,14 @@ const PALETTE = {
     mineralGlow: "rgba(145, 170, 185, 0.25)",
     mineralPickup: "#73ff9b",
     antiGravity: "#8fffd3",
+    rapidFire: "#ffbe6a",
+    multiShot: "#7ee7ff",
+    piercing: "#ff8df3",
+    thrustersBoost: "#ffd07a",
+    gravityDampers: "#82a8ff",
+    nanite: "#8cffb9",
+    shotRange: "#66f3ff",
+    homing: "#b5ff8c",
     hud: "#f3f7ff",
     hudAccent: "#f8b36b",
     combo: "#ffd166"
@@ -1581,7 +1589,7 @@ function getUpgradePool(includeUnavailable = false) {
         {
             id: "rapid-fire",
             title: "Rapid Fire",
-            description: "Fire faster and keep one more shot on screen for 60s.",
+            description: "Fire faster and keep one more shot on screen for 30s.",
             timed: true,
             canOffer: () => upgradeState.rapidFire < TIMED_POWERUP_MAX_STACKS.rapidFire,
             apply: () => {
@@ -1591,7 +1599,7 @@ function getUpgradePool(includeUnavailable = false) {
         {
             id: "twin-cannons",
             title: "Twin Cannons",
-            description: "Add another projectile to every shot for 60s.",
+            description: "Add another projectile to every shot for 30s.",
             timed: true,
             canOffer: () => upgradeState.multiShot < TIMED_POWERUP_MAX_STACKS.multiShot,
             apply: () => {
@@ -1601,7 +1609,7 @@ function getUpgradePool(includeUnavailable = false) {
         {
             id: "piercing-rounds",
             title: "Piercing Rounds",
-            description: "Shots punch through one extra target for 60s.",
+            description: "Shots punch through one extra target for 30s.",
             timed: true,
             canOffer: () => upgradeState.piercing < TIMED_POWERUP_MAX_STACKS.piercing,
             apply: () => {
@@ -1611,7 +1619,7 @@ function getUpgradePool(includeUnavailable = false) {
         {
             id: "overdrive-thrusters",
             title: "Overdrive",
-            description: "More thrust and higher top speed for 60s.",
+            description: "More thrust and higher top speed for 30s.",
             timed: true,
             canOffer: () => upgradeState.thrusters < TIMED_POWERUP_MAX_STACKS.thrusters,
             apply: () => {
@@ -1621,7 +1629,7 @@ function getUpgradePool(includeUnavailable = false) {
         {
             id: "shield-matrix",
             title: "Shield Matrix",
-            description: "Gain a shield layer and refill now for 60s.",
+            description: "Gain a shield layer and refill now for 30s.",
             timed: true,
             canOffer: () => upgradeState.maxShields < TIMED_POWERUP_MAX_STACKS.maxShields,
             apply: () => {
@@ -1633,7 +1641,7 @@ function getUpgradePool(includeUnavailable = false) {
         {
             id: "grav-dampers",
             title: "Grav Dampers",
-            description: "Reduce large-asteroid gravity by one step for 60s.",
+            description: "Reduce large-asteroid gravity by one step for 30s.",
             timed: true,
             alwaysOffer: () => getEffectiveGravitySteps() > 0,
             canOffer: () => getEffectiveGravitySteps() > 0
@@ -1646,7 +1654,7 @@ function getUpgradePool(includeUnavailable = false) {
         {
             id: "nanite-repair",
             title: "Nanite Repair",
-            description: "For 60s, a lethal hit is negated once.",
+            description: "For 30s, a lethal hit is negated once.",
             timed: true,
             canOffer: () => upgradeState.naniteRepair < TIMED_POWERUP_MAX_STACKS.naniteRepair,
             apply: () => {
@@ -1658,7 +1666,7 @@ function getUpgradePool(includeUnavailable = false) {
         {
             id: "range-lenses",
             title: "Range Lenses",
-            description: "Double laser travel distance for 60s.",
+            description: "Double laser travel distance for 30s.",
             timed: true,
             canOffer: () => upgradeState.shotRange < TIMED_POWERUP_MAX_STACKS.shotRange,
             apply: () => {
@@ -1679,7 +1687,7 @@ function getUpgradePool(includeUnavailable = false) {
         {
             id: "anti-gravity-field",
             title: "Anti-Gravity",
-            description: "Repel incoming objects and prevent collisions for 60s.",
+            description: "Repel incoming objects and prevent collisions for 30s.",
             timed: true,
             canOffer: () => upgradeState.antiGravity < TIMED_POWERUP_MAX_STACKS.antiGravity,
             apply: () => {
@@ -3460,6 +3468,7 @@ function spawnPlayerProjectile(angle) {
     const homing = hasHomingShots();
     const baseShotSpeed = PLAYER_SHOT_SPEED * gameplayProfile.shotScale;
     const shotSpeed = homing ? baseShotSpeed * PLAYER_HOMING_SHOT_SPEED_MULTIPLIER : baseShotSpeed;
+    const rangeBoost = upgradeState.shotRange > 0;
     playerShots.push({
         x: ship.x + Math.cos(angle) * (18 * ship.modelScale),
         y: ship.y + Math.sin(angle) * (18 * ship.modelScale),
@@ -3468,7 +3477,8 @@ function spawnPlayerProjectile(angle) {
         radius: 2 * gameplayProfile.entityScale,
         life: getPlayerShotLife(),
         pierce: getPlayerPierce(),
-        homing
+        homing,
+        rangeBoost
     });
 }
 
@@ -4592,6 +4602,161 @@ function drawShipOutline(x, y, angle, scale = 1) {
     ctx.restore();
 }
 
+function drawShipPowerupVisuals() {
+    const noseAngle = ship.angle - Math.PI / 2;
+    const nx = Math.cos(noseAngle);
+    const ny = Math.sin(noseAngle);
+    const rx = Math.cos(noseAngle + Math.PI / 2);
+    const ry = Math.sin(noseAngle + Math.PI / 2);
+    const t = lastFrameTime * 0.001;
+
+    ctx.save();
+
+    if (upgradeState.rapidFire > 0) {
+        ctx.strokeStyle = PALETTE.rapidFire;
+        ctx.shadowColor = PALETTE.rapidFire;
+        ctx.shadowBlur = 12;
+        ctx.lineWidth = 1.8;
+        for (let sparkIndex = -1; sparkIndex <= 1; sparkIndex += 1) {
+            const phase = t * 10 + sparkIndex * 1.2;
+            const sparkDist = ship.radius + 8 + (Math.sin(phase) + 1) * 1.8;
+            const sparkX = ship.x + nx * sparkDist + rx * sparkIndex * 4.6;
+            const sparkY = ship.y + ny * sparkDist + ry * sparkIndex * 4.6;
+            ctx.beginPath();
+            ctx.moveTo(sparkX, sparkY);
+            ctx.lineTo(sparkX - nx * 5.4, sparkY - ny * 5.4);
+            ctx.stroke();
+        }
+    }
+
+    if (upgradeState.multiShot > 0) {
+        const podOffset = ship.radius + 2;
+        const podRadius = 1.8 + Math.min(2.6, upgradeState.multiShot * 0.45);
+        ctx.fillStyle = PALETTE.multiShot;
+        ctx.shadowColor = PALETTE.multiShot;
+        ctx.shadowBlur = 10;
+        ctx.beginPath();
+        ctx.arc(ship.x + rx * podOffset, ship.y + ry * podOffset, podRadius, 0, Math.PI * 2);
+        ctx.arc(ship.x - rx * podOffset, ship.y - ry * podOffset, podRadius, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    if (upgradeState.piercing > 0) {
+        const pulse = 0.42 + (Math.sin(t * 7.2) + 1) * 0.18;
+        const r = ship.radius + 6;
+        ctx.globalAlpha = pulse;
+        ctx.strokeStyle = PALETTE.piercing;
+        ctx.shadowColor = PALETTE.piercing;
+        ctx.shadowBlur = 12;
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.moveTo(ship.x, ship.y - r);
+        ctx.lineTo(ship.x + r, ship.y);
+        ctx.lineTo(ship.x, ship.y + r);
+        ctx.lineTo(ship.x - r, ship.y);
+        ctx.closePath();
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+    }
+
+    if (upgradeState.thrusters > 0) {
+        const boostPulse = 0.3 + (Math.sin(t * 5.4) + 1) * 0.16;
+        const rearX = ship.x - nx * (ship.radius + 7);
+        const rearY = ship.y - ny * (ship.radius + 7);
+        const flareLen = (isTouchThrustingActive() ? 11 : 6) * ship.modelScale;
+        ctx.strokeStyle = PALETTE.thrustersBoost;
+        ctx.shadowColor = PALETTE.thrustersBoost;
+        ctx.shadowBlur = 16;
+        ctx.globalAlpha = boostPulse;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(rearX - rx * 4, rearY - ry * 4);
+        ctx.lineTo(rearX - nx * flareLen, rearY - ny * flareLen);
+        ctx.lineTo(rearX + rx * 4, rearY + ry * 4);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+    }
+
+    if (upgradeState.gravityDampers > 0) {
+        const dampRadius = ship.radius + 11;
+        ctx.strokeStyle = PALETTE.gravityDampers;
+        ctx.shadowColor = PALETTE.gravityDampers;
+        ctx.shadowBlur = 10;
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([3, 5]);
+        ctx.lineDashOffset = -t * 42;
+        ctx.globalAlpha = 0.58;
+        ctx.beginPath();
+        ctx.arc(ship.x, ship.y, dampRadius, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([2, 6]);
+        ctx.lineDashOffset = t * 34;
+        ctx.globalAlpha = 0.34;
+        ctx.beginPath();
+        ctx.arc(ship.x, ship.y, dampRadius + 5, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.globalAlpha = 1;
+    }
+
+    if (upgradeState.naniteRepair > 0) {
+        const pulse = 0.5 + (Math.sin(t * 6.8) + 1) * 0.18;
+        const markX = ship.x + nx * (ship.radius + 3);
+        const markY = ship.y + ny * (ship.radius + 3);
+        ctx.strokeStyle = PALETTE.nanite;
+        ctx.shadowColor = PALETTE.nanite;
+        ctx.shadowBlur = 10;
+        ctx.globalAlpha = pulse;
+        ctx.lineWidth = 1.9;
+        ctx.beginPath();
+        ctx.moveTo(markX - 4, markY);
+        ctx.lineTo(markX + 4, markY);
+        ctx.moveTo(markX, markY - 4);
+        ctx.lineTo(markX, markY + 4);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+    }
+
+    if (upgradeState.shotRange > 0) {
+        const rangeRadius = ship.radius + 18;
+        ctx.strokeStyle = PALETTE.shotRange;
+        ctx.shadowColor = PALETTE.shotRange;
+        ctx.shadowBlur = 11;
+        ctx.globalAlpha = 0.38;
+        ctx.lineWidth = 1.3;
+        ctx.setLineDash([2, 7]);
+        ctx.lineDashOffset = t * 28;
+        ctx.beginPath();
+        ctx.arc(ship.x, ship.y, rangeRadius, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.globalAlpha = 1;
+    }
+
+    if (upgradeState.homing > 0) {
+        const orbitAngle = t * 3.1;
+        const orbitRadius = ship.radius + 15;
+        const hx = ship.x + Math.cos(orbitAngle) * orbitRadius;
+        const hy = ship.y + Math.sin(orbitAngle) * orbitRadius;
+        ctx.strokeStyle = PALETTE.homing;
+        ctx.fillStyle = PALETTE.homing;
+        ctx.shadowColor = PALETTE.homing;
+        ctx.shadowBlur = 10;
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.arc(hx, hy, 3.1, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(hx + 4.6, hy);
+        ctx.lineTo(hx + 7.6, hy - 1.4);
+        ctx.lineTo(hx + 7.6, hy + 1.4);
+        ctx.closePath();
+        ctx.fill();
+    }
+
+    ctx.restore();
+}
+
 function drawShip() {
     if (!ship.active) {
         return;
@@ -4645,6 +4810,8 @@ function drawShip() {
         ctx.globalAlpha = 1;
         ctx.strokeStyle = PALETTE.ship;
     }
+
+    drawShipPowerupVisuals();
 
     ctx.shadowColor = PALETTE.ship;
     ctx.shadowBlur = 12;
@@ -4765,17 +4932,56 @@ function drawAsteroids() {
 }
 
 function drawShotArray(shotArray, color = "#ffffff") {
+    const isPlayerShots = shotArray === playerShots;
     ctx.save();
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 2;
-    ctx.shadowColor = color;
-    ctx.shadowBlur = 12;
 
     for (const shot of shotArray) {
+        const shotColor = isPlayerShots
+            ? (shot.homing ? PALETTE.homing : (shot.pierce > 0 ? PALETTE.piercing : color))
+            : color;
+        const trailLength = isPlayerShots && shot.rangeBoost ? 2.1 : 1.4;
+        const shotLineWidth = isPlayerShots && shot.homing ? 2.35 : 2;
+        const blur = isPlayerShots && shot.homing ? 16 : 12;
+        const tailX = shot.x - shot.vx * trailLength;
+        const tailY = shot.y - shot.vy * trailLength;
+
+        if (isPlayerShots && shot.pierce > 0) {
+            ctx.strokeStyle = "rgba(255, 171, 255, 0.78)";
+            ctx.shadowColor = PALETTE.piercing;
+            ctx.shadowBlur = 14;
+            ctx.lineWidth = shotLineWidth + 1.3;
+            ctx.beginPath();
+            ctx.moveTo(shot.x, shot.y);
+            ctx.lineTo(tailX, tailY);
+            ctx.stroke();
+        }
+
+        if (isPlayerShots && shot.rangeBoost) {
+            ctx.strokeStyle = "rgba(102, 243, 255, 0.38)";
+            ctx.shadowColor = PALETTE.shotRange;
+            ctx.shadowBlur = 13;
+            ctx.lineWidth = shotLineWidth + 0.9;
+            ctx.beginPath();
+            ctx.moveTo(shot.x, shot.y);
+            ctx.lineTo(shot.x - shot.vx * (trailLength + 0.55), shot.y - shot.vy * (trailLength + 0.55));
+            ctx.stroke();
+        }
+
+        ctx.strokeStyle = shotColor;
+        ctx.lineWidth = shotLineWidth;
+        ctx.shadowColor = shotColor;
+        ctx.shadowBlur = blur;
         ctx.beginPath();
         ctx.moveTo(shot.x, shot.y);
-        ctx.lineTo(shot.x - shot.vx * 1.4, shot.y - shot.vy * 1.4);
+        ctx.lineTo(tailX, tailY);
         ctx.stroke();
+
+        if (isPlayerShots && shot.homing) {
+            ctx.fillStyle = "rgba(214, 255, 188, 0.92)";
+            ctx.beginPath();
+            ctx.arc(shot.x, shot.y, 1.25, 0, Math.PI * 2);
+            ctx.fill();
+        }
     }
 
     ctx.restore();

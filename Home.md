@@ -1,6 +1,6 @@
 # Home
 
-# Classic Asteroids (v1.074)
+# Classic Asteroids (v1.075)
 
 **Classic Asteroids** is a browser-based HTML5 arcade game inspired by the original *Asteroids*, rebuilt with modern polish, responsive touch support, upgrade-driven runs, dynamic UFO encounters, and a clean neon vector aesthetic.
 
@@ -278,7 +278,7 @@ This keeps the loop predictable and makes it easier to extend.
 **Classic Asteroids HTML5**  
 Created by **Tom Wellborn**  
 2026  
-Version **1.074**
+Version **1.075**
 
 Background Milky Way photo: **ESO/S. Brunier**, CC BY 4.0 ([Wikimedia Commons](https://commons.wikimedia.org/wiki/File:ESO_-_Milky_Way.jpg)).
 

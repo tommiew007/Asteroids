@@ -34,10 +34,11 @@ const bossImages = {
     large: new Image()
 };
 const milkyWayPhoto = new Image();
+const titanPhoto = new Image();
 const asteroidSurfacePhotos = [];
 
 const HUD_FONT = "'Press Start 2P', monospace";
-const GAME_VERSION = "1.074";
+const GAME_VERSION = "1.075";
 const ABOUT_CREDIT_TEXT = `Classic Asteroids HTML5 by Tom Wellborn 2026 v${GAME_VERSION}`;
 const ABOUT_CODEBASE_URL = "https://github.com/tommiew007/Asteroids";
 const ABOUT_WIKI_URL = "https://github.com/tommiew007/Asteroids/wiki";
@@ -376,6 +377,97 @@ function setSafeImageSource(image, src, label = "image") {
     return true;
 }
 
+function buildBlackToTransparentTrimmedCanvas(image) {
+    if (!image || !image.naturalWidth || !image.naturalHeight) {
+        return null;
+    }
+
+    const sourceCanvas = document.createElement("canvas");
+    sourceCanvas.width = image.naturalWidth;
+    sourceCanvas.height = image.naturalHeight;
+    const sourceCtx = sourceCanvas.getContext("2d", { willReadFrequently: true });
+    if (!sourceCtx) {
+        return null;
+    }
+
+    sourceCtx.drawImage(image, 0, 0);
+    const imageData = sourceCtx.getImageData(0, 0, sourceCanvas.width, sourceCanvas.height);
+    const { data, width, height } = imageData;
+    const blackThreshold = 26;
+    const featherRange = 42;
+    const visibleAlphaThreshold = 6;
+
+    let minX = width;
+    let minY = height;
+    let maxX = -1;
+    let maxY = -1;
+
+    for (let index = 0; index < data.length; index += 4) {
+        const red = data[index];
+        const green = data[index + 1];
+        const blue = data[index + 2];
+        const maxChannel = Math.max(red, green, blue);
+
+        if (maxChannel <= blackThreshold) {
+            data[index + 3] = 0;
+            continue;
+        }
+
+        if (maxChannel < blackThreshold + featherRange) {
+            const fade = (maxChannel - blackThreshold) / featherRange;
+            data[index + 3] = Math.round(data[index + 3] * fade);
+        }
+
+        if (data[index + 3] <= visibleAlphaThreshold) {
+            continue;
+        }
+
+        const pixelIndex = index / 4;
+        const x = pixelIndex % width;
+        const y = Math.floor(pixelIndex / width);
+        if (x < minX) {
+            minX = x;
+        }
+        if (y < minY) {
+            minY = y;
+        }
+        if (x > maxX) {
+            maxX = x;
+        }
+        if (y > maxY) {
+            maxY = y;
+        }
+    }
+
+    sourceCtx.putImageData(imageData, 0, 0);
+    if (maxX < minX || maxY < minY) {
+        return null;
+    }
+
+    const trimmedWidth = Math.max(1, maxX - minX + 1);
+    const trimmedHeight = Math.max(1, maxY - minY + 1);
+    const trimmedCanvas = document.createElement("canvas");
+    trimmedCanvas.width = trimmedWidth;
+    trimmedCanvas.height = trimmedHeight;
+    const trimmedCtx = trimmedCanvas.getContext("2d");
+    if (!trimmedCtx) {
+        return null;
+    }
+
+    trimmedCtx.drawImage(
+        sourceCanvas,
+        minX,
+        minY,
+        trimmedWidth,
+        trimmedHeight,
+        0,
+        0,
+        trimmedWidth,
+        trimmedHeight
+    );
+    return trimmedCanvas;
+}
+
 setSafeImageSource(bossImages.small, "ufo-small.svg", "small boss");
 setSafeImageSource(bossImages.large, "ufo-large.svg", "large boss");
 milkyWayPhoto.decoding = "async";
@@ -386,6 +478,16 @@ milkyWayPhoto.addEventListener("error", () => {
     milkyWayPhotoReady = false;
 });
 setSafeImageSource(milkyWayPhoto, "assets/milky-way.jpg", "milky way");
+titanPhoto.decoding = "async";
+titanPhoto.addEventListener("load", () => {
+    titanPhotoMaskedCanvas = buildBlackToTransparentTrimmedCanvas(titanPhoto);
+    titanPhotoReady = Boolean(titanPhotoMaskedCanvas);
+});
+titanPhoto.addEventListener("error", () => {
+    titanPhotoReady = false;
+    titanPhotoMaskedCanvas = null;
+});
+setSafeImageSource(titanPhoto, "titan.jpg", "titan");
 for (const surface of asteroidSurfacePhotos) {
     surface.image.decoding = "async";
     surface.image.addEventListener("load", () => {
@@ -434,6 +536,8 @@ let isMobilePhoneUI = false;
 let surgeActive = false;
 let surgeTimer = 0;
 let milkyWayPhotoReady = false;
+let titanPhotoReady = false;
+let titanPhotoMaskedCanvas = null;
 
 let stars = [];
 let asteroids = [];
@@ -5154,24 +5258,41 @@ function drawAsteroids() {
 
         if (asteroid.isTitan) {
             const pulse = 0.42 + (Math.sin(lastFrameTime * 0.01 + asteroid.x * 0.003 + asteroid.y * 0.002) + 1) * 0.18;
-            const drewLargeTexture = ensureLargeAsteroidTexture(asteroid);
-            if (drewLargeTexture && asteroid.largeVisualTexture) {
-                const size = asteroid.largeVisualTextureSize;
+            if (titanPhotoReady && titanPhotoMaskedCanvas) {
+                const maxDimension = Math.max(titanPhotoMaskedCanvas.width, titanPhotoMaskedCanvas.height);
+                const baseDiameter = asteroid.radius * 2.02;
+                const drawScale = baseDiameter / Math.max(1, maxDimension);
+                const drawWidth = titanPhotoMaskedCanvas.width * drawScale;
+                const drawHeight = titanPhotoMaskedCanvas.height * drawScale;
                 ctx.globalAlpha = 1;
                 ctx.shadowColor = "rgba(255, 190, 140, 0.46)";
                 ctx.shadowBlur = 12;
-                ctx.filter = "brightness(1.18) contrast(1.16)";
-                ctx.drawImage(asteroid.largeVisualTexture, -size / 2, -size / 2, size, size);
+                const previousSmoothing = ctx.imageSmoothingEnabled;
+                ctx.imageSmoothingEnabled = true;
+                ctx.filter = "brightness(1.12) contrast(1.1)";
+                ctx.drawImage(titanPhotoMaskedCanvas, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
                 ctx.filter = "none";
+                ctx.imageSmoothingEnabled = previousSmoothing;
             } else {
-                ctx.fillStyle = "rgba(112, 65, 40, 0.48)";
-                ctx.strokeStyle = "#f7c29b";
-                ctx.lineWidth = 4;
-                ctx.shadowColor = "rgba(255, 190, 140, 0.9)";
-                ctx.shadowBlur = 24;
-                traceAsteroidPath(ctx, asteroid.points);
-                ctx.fill();
-                ctx.stroke();
+                const drewLargeTexture = ensureLargeAsteroidTexture(asteroid);
+                if (drewLargeTexture && asteroid.largeVisualTexture) {
+                    const size = asteroid.largeVisualTextureSize;
+                    ctx.globalAlpha = 1;
+                    ctx.shadowColor = "rgba(255, 190, 140, 0.46)";
+                    ctx.shadowBlur = 12;
+                    ctx.filter = "brightness(1.18) contrast(1.16)";
+                    ctx.drawImage(asteroid.largeVisualTexture, -size / 2, -size / 2, size, size);
+                    ctx.filter = "none";
+                } else {
+                    ctx.fillStyle = "rgba(112, 65, 40, 0.48)";
+                    ctx.strokeStyle = "#f7c29b";
+                    ctx.lineWidth = 4;
+                    ctx.shadowColor = "rgba(255, 190, 140, 0.9)";
+                    ctx.shadowBlur = 24;
+                    traceAsteroidPath(ctx, asteroid.points);
+                    ctx.fill();
+                    ctx.stroke();
+                }
             }
 
             ctx.globalAlpha = 0.12 + pulse * 0.2;

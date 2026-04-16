@@ -37,7 +37,7 @@ const milkyWayPhoto = new Image();
 const asteroidSurfacePhotos = [];
 
 const HUD_FONT = "'Press Start 2P', monospace";
-const GAME_VERSION = "1.069";
+const GAME_VERSION = "1.071";
 const ABOUT_CREDIT_TEXT = `Classic Asteroids HTML5 by Tom Wellborn 2026 v${GAME_VERSION}`;
 const ABOUT_CODEBASE_URL = "https://github.com/tommiew007/Asteroids";
 const ABOUT_WIKI_URL = "https://github.com/tommiew007/Asteroids/wiki";
@@ -118,6 +118,7 @@ const TITAN_SPEED_STEP = 0.035;
 const TITAN_SPEED_MAX = 0.9;
 const TITAN_RADIUS_RATIO = 0.187;
 const TITAN_GRAVITY_RANGE_MULTIPLIER = 15;
+const TITAN_GRAVITY_INTENSITY_SCALE = 0.58;
 const TITAN_ALERT_FRAMES = 210;
 const TITAN_BOSS_SCORE_VALUE = 500;
 const TITAN_CHILD_CLEAR_BONUS = 500;
@@ -2972,7 +2973,7 @@ function createTitanBossAsteroid(config) {
     titan.rotation = randomBetween(-0.012, 0.012);
     titan.largeVisualTexture = null;
     titan.largeVisualTextureSize = 0;
-    titan.largeVisualTextureDirty = false;
+    titan.largeVisualTextureDirty = true;
     titan.isTitan = true;
     titan.titanTier = config.tier;
     titan.titanGravityStrength = config.gravityStrength;
@@ -3678,7 +3679,10 @@ function applyLargeAsteroidGravity(dt) {
         }
 
         const customGravityStrength = asteroid.isTitan
-            ? asteroid.titanGravityStrength * gameplayProfile.movementScale * GLOBAL_GRAVITY_INTENSITY_SCALE
+            ? asteroid.titanGravityStrength
+                * gameplayProfile.movementScale
+                * GLOBAL_GRAVITY_INTENSITY_SCALE
+                * TITAN_GRAVITY_INTENSITY_SCALE
             : gravityStrength;
         if (customGravityStrength <= 0) {
             continue;
@@ -5141,14 +5145,25 @@ function drawAsteroids() {
 
         if (asteroid.isTitan) {
             const pulse = 0.42 + (Math.sin(lastFrameTime * 0.01 + asteroid.x * 0.003 + asteroid.y * 0.002) + 1) * 0.18;
-            ctx.fillStyle = "rgba(112, 65, 40, 0.48)";
-            ctx.strokeStyle = "#f7c29b";
-            ctx.lineWidth = 4;
-            ctx.shadowColor = "rgba(255, 190, 140, 0.9)";
-            ctx.shadowBlur = 24;
-            traceAsteroidPath(ctx, asteroid.points);
-            ctx.fill();
-            ctx.stroke();
+            const drewLargeTexture = ensureLargeAsteroidTexture(asteroid);
+            if (drewLargeTexture && asteroid.largeVisualTexture) {
+                const size = asteroid.largeVisualTextureSize;
+                ctx.globalAlpha = 1;
+                ctx.shadowColor = "rgba(255, 190, 140, 0.46)";
+                ctx.shadowBlur = 12;
+                ctx.filter = "brightness(1.18) contrast(1.16)";
+                ctx.drawImage(asteroid.largeVisualTexture, -size / 2, -size / 2, size, size);
+                ctx.filter = "none";
+            } else {
+                ctx.fillStyle = "rgba(112, 65, 40, 0.48)";
+                ctx.strokeStyle = "#f7c29b";
+                ctx.lineWidth = 4;
+                ctx.shadowColor = "rgba(255, 190, 140, 0.9)";
+                ctx.shadowBlur = 24;
+                traceAsteroidPath(ctx, asteroid.points);
+                ctx.fill();
+                ctx.stroke();
+            }
 
             ctx.globalAlpha = pulse;
             ctx.strokeStyle = "rgba(255, 236, 210, 0.85)";

@@ -1,4 +1,4 @@
-# Classic Asteroids (v1.080)
+# Classic Asteroids (v1.081)
 
 **Classic Asteroids** is a browser-based HTML5 arcade game inspired by the original *Asteroids*, rebuilt with modern polish, responsive touch support, upgrade-driven runs, dynamic UFO encounters, and a clean neon vector aesthetic.
 
@@ -10,6 +10,7 @@ The current build combines classic screen-wrapping survival with layered systems
 - Screen-wrapping ship, asteroids, UFOs, and shots
 - Large and small saucers with different threat levels
 - Titan boss wave every 5 waves
+- Asteroid overlap impacts can trigger at 10%
 - Upgrade choices every 2 waves
 - Extra lives awarded by score
 - Shields, combos, screen shake, flash effects, and alert banners
@@ -56,9 +57,12 @@ The longer you survive, the more dangerous the battlefield becomes.
 ### Mobile / Touch
 
 - **Touch and hold on playfield**: Rotate toward touch, then thrust when aligned
+- **Left / Right**: Rotate
+- **Thrust**: Accelerate
 - **Hyper**: Trigger hyperspace
 - **Fire**: Shoot
 - **II**: Pause
+- **Start**: Start/restart
 - **About**: Open credits/about panel
 
 ## Game Systems
@@ -83,20 +87,22 @@ Small saucers can launch decoy ships. Decoys are dangerous on collision and now 
 
 ### Threat Bomb Event
 
-Starting in later waves, a blinking threat bomb can sweep across the field. If you destroy it, all visible enemies are wiped and you receive the bomb bonus plus sweep points for each visible destroyed target.
+Starting in wave 3+, a blinking threat bomb can sweep across the field on a staggered random schedule. If you destroy it, all visible enemies are wiped and you receive the bomb bonus plus sweep points for each visible destroyed target.
 
 ### Titan Boss Wave
 
 Every 5 waves, a **Titan Boss** event can replace a normal opener:
 
 - A massive asteroid enters with stronger pull and dramatic alert effects
-- Destroying it grants a Titan bonus
-- It bursts into multiple large asteroids and the wave continues
-- Titan gravity and fragment count ramp up per Titan appearance, with caps for playability
+- It takes **20 hits** to break on the first Titan wave, then +2 hits per Titan wave (max 50)
+- On break, it gives **500 pts** (`TITAN BREAK BONUS`)
+- It bursts into **4 large asteroids** on first Titan wave, then +1 per Titan wave (max 10)
+- Clearing all Titan child asteroids gives another **500 pts** (`TITAN SWEEP BONUS`)
+- Titan gravity, speed, fragment count, and durability all ramp by Titan tier with caps for playability
 
 ### Mineral Field Event
 
-A staggered timed event introduces small mineral particles that cross the screen. Touching minerals awards points and creates a short pickup feedback effect.
+A staggered timed event (wave 3+) introduces small mineral particles that cross the screen in groups of ~20-30. Touching minerals awards +10 points each and creates pickup feedback effects.
 
 ### Asteroid Splitting
 
@@ -156,6 +162,13 @@ Current upgrade pool includes:
 - **Shield Matrix**: Add shield layers and recharge them
 - **Grav Dampers**: Reduce large-asteroid gravity pressure
 - **Nanite Repair**: Restore a ship and refill shields
+- **Range Lenses**: Double laser travel distance
+- **Seeker Array**: Homing lasers (short duration)
+- **Anti-Gravity Field**: Repels incoming objects and prevents collisions
+
+Power-up timing:
+- Most timed power-ups last **30 seconds**
+- **Seeker Array** lasts **10 seconds**
 
 This system gives the game a run-building structure instead of making every wave feel identical.
 
@@ -163,7 +176,8 @@ This system gives the game a run-building structure instead of making every wave
 
 Classic Asteroids uses a neon-inflected vector look with:
 - glowing ship outlines
-- stylized asteroid colorways
+- asteroid textures sourced from NASA asteroid surface imagery (plus color variation/tinting)
+- dedicated Titan boss image rendering
 - background nebula layers
 - real Milky Way photo layer
 - starfield twinkle
@@ -241,6 +255,7 @@ When God Mode is active:
 - **4**: Spawn mineral field
 - **5**: Spawn decoy pair
 - **6** or **B**: Spawn Titan boss wave
+- **7**: Spawn rogue asteroid
 - **U**: Open full power-up draft (all currently available upgrades)
 - **L**: Jump to a target wave
 - **K**: Clear the current wave instantly
@@ -254,7 +269,7 @@ These are useful during balancing, content testing, and tuning later-game diffic
 - **Rendering**: HTML5 Canvas 2D
 - **UI Shell**: Single HTML page with overlay panels and touch controls
 - **Persistence**: `localStorage` for high score and audio settings
-- **Assets**: SVG saucer art, browser audio files, optional social preview image
+- **Assets**: SVG saucer art, browser audio files, NASA asteroid surface images, custom Titan image, and social preview image
 - **Input**: Keyboard plus touch/pointer controls
 - **Architecture**: State-driven game loop with separate update and render phases
 
@@ -276,7 +291,7 @@ This keeps the loop predictable and makes it easier to extend.
 **Classic Asteroids HTML5**  
 Created by **Tom Wellborn**  
 2026  
-Version **1.080**
+Version **1.081**
 
 Background Milky Way photo: **ESO/S. Brunier**, CC BY 4.0 ([Wikimedia Commons](https://commons.wikimedia.org/wiki/File:ESO_-_Milky_Way.jpg)).
 

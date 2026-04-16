@@ -1,5 +1,3 @@
-# Home
-
 # Classic Asteroids (v1.080)
 
 **Classic Asteroids** is a browser-based HTML5 arcade game inspired by the original *Asteroids*, rebuilt with modern polish, responsive touch support, upgrade-driven runs, dynamic UFO encounters, and a clean neon vector aesthetic.

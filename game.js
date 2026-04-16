@@ -38,7 +38,7 @@ const titanPhoto = new Image();
 const asteroidSurfacePhotos = [];
 
 const HUD_FONT = "'Press Start 2P', monospace";
-const GAME_VERSION = "1.1";
+const GAME_VERSION = "1.101";
 const ABOUT_CREDIT_TEXT = `Classic Asteroids HTML5 by Tom Wellborn 2026 v${GAME_VERSION}`;
 const ABOUT_CODEBASE_URL = "https://github.com/tommiew007/Asteroids";
 const ABOUT_WIKI_URL = "https://github.com/tommiew007/Asteroids/wiki";
@@ -2929,6 +2929,11 @@ function getOpaqueColorFromFill(fillColor, fallback = "rgb(104, 84, 70)") {
     return `rgb(${red}, ${green}, ${blue})`;
 }
 
+function getDefaultAsteroidSpawnSpeedCeiling(sizeIndex = 0) {
+    const normalizedSizeIndex = Number.isFinite(sizeIndex) ? Math.max(0, sizeIndex) : 0;
+    return (1.9 + normalizedSizeIndex * 0.35) * gameplayProfile.movementScale;
+}
+
 function createAsteroid(sizeIndex = 0, x, y, angle, inheritedSpeed, options = {}) {
     const radius = ASTEROID_RADII[sizeIndex] * gameplayProfile.entityScale * getAsteroidRadiusMultiplier();
     const position = Number.isFinite(x) && Number.isFinite(y)
@@ -2940,9 +2945,14 @@ function createAsteroid(sizeIndex = 0, x, y, angle, inheritedSpeed, options = {}
         : randomBetween(1.2 + sizeIndex * 0.25, 1.9 + sizeIndex * 0.35) * gameplayProfile.movementScale;
     const baseSpeed = Number.isFinite(options.baseSpeed) ? options.baseSpeed : Math.max(0.01, Math.abs(speed));
     const isRogue = Boolean(options.rogue);
-    const maxSpeed = Number.isFinite(options.maxSpeed)
-        ? options.maxSpeed
-        : (isRogue ? Infinity : baseSpeed * NON_ROGUE_ASTEROID_MAX_SPEED_MULTIPLIER);
+    const nonRogueSpeedCeiling = getDefaultAsteroidSpawnSpeedCeiling(sizeIndex) * NON_ROGUE_ASTEROID_MAX_SPEED_MULTIPLIER;
+    const requestedMaxSpeed = Number.isFinite(options.maxSpeed)
+        ? Math.max(0, options.maxSpeed)
+        : nonRogueSpeedCeiling;
+    const maxSpeed = isRogue ? Infinity : Math.min(nonRogueSpeedCeiling, requestedMaxSpeed);
+    const initialSpeed = (!isRogue && Number.isFinite(maxSpeed) && maxSpeed > 0 && Math.abs(speed) > maxSpeed)
+        ? Math.sign(speed) * maxSpeed
+        : speed;
     const elite = Boolean(options.elite);
     const colorway = options.colorway || pickRandomAsteroidColorway();
     const surfaceTextureIndex = Number.isFinite(options.surfaceTextureIndex)
@@ -2953,8 +2963,8 @@ function createAsteroid(sizeIndex = 0, x, y, angle, inheritedSpeed, options = {}
         id: ++asteroidSerial,
         x: position.x,
         y: position.y,
-        vx: Math.cos(direction) * speed,
-        vy: Math.sin(direction) * speed,
+        vx: Math.cos(direction) * initialSpeed,
+        vy: Math.sin(direction) * initialSpeed,
         radius,
         sizeIndex,
         angle: Math.random() * Math.PI * 2,

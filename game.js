@@ -303,6 +303,7 @@ const PALETTE = {
     thrust: "#ffb454",
     playerShot: "#7ee7ff",
     enemyShot: "#ff9a76",
+    ufoLarge: "#cc3333",
     mineralGlow: "rgba(145, 170, 185, 0.25)",
     mineralPickup: "#73ff9b",
     antiGravity: "#8fffd3",
@@ -1180,7 +1181,7 @@ function createMineralField() {
 }
 
 function spawnMineralField() {
-    if (wave < 3 || mineralField || gameState !== "playing") {
+    if (wave < 6 || mineralField || gameState !== "playing") {
         return;
     }
 
@@ -1233,7 +1234,7 @@ function createThreatBomb() {
 }
 
 function spawnThreatBomb() {
-    if (wave < 3 || threatBomb || gameState !== "playing") {
+    if (wave < 6 || threatBomb || gameState !== "playing") {
         return;
     }
 
@@ -1320,7 +1321,7 @@ function detonateThreatBomb() {
         createLineBurst(
             ufo.x,
             ufo.y,
-            ufo.type === "small" ? PALETTE.enemyShot : PALETTE.ship,
+            ufo.type === "small" ? PALETTE.enemyShot : PALETTE.ufoLarge,
             20,
             1.4,
             4.2,
@@ -1331,7 +1332,7 @@ function detonateThreatBomb() {
     }
 
     for (const decoy of decoys) {
-        createLineBurst(decoy.x, decoy.y, PALETTE.ship, 14, 0.9, 3.1, 14, 36);
+        createLineBurst(decoy.x, decoy.y, PALETTE.ufoLarge, 14, 0.9, 3.1, 14, 36);
     }
 
     asteroids = [];
@@ -3085,10 +3086,10 @@ function removeDecoy(index, exploded = true) {
         return;
     }
 
-    createLineBurst(decoy.x, decoy.y, PALETTE.ship, 14, 0.9, 3.1, 14, 36);
+    createLineBurst(decoy.x, decoy.y, PALETTE.ufoLarge, 14, 0.9, 3.1, 14, 36);
     playEffect("asteroidHit");
     addScreenShake(5, 7);
-    triggerFlash(PALETTE.ship, 0.08);
+    triggerFlash(PALETTE.ufoLarge, 0.08);
 }
 
 function chooseUfoType() {
@@ -3568,7 +3569,7 @@ function clearWaveInGodMode() {
         createLineBurst(
             ufo.x,
             ufo.y,
-            ufo.type === "small" ? PALETTE.enemyShot : PALETTE.ship,
+            ufo.type === "small" ? PALETTE.enemyShot : PALETTE.ufoLarge,
             20,
             1.4,
             4.2,
@@ -3579,7 +3580,7 @@ function clearWaveInGodMode() {
     }
 
     for (const decoy of decoys) {
-        createLineBurst(decoy.x, decoy.y, PALETTE.ship, 14, 0.9, 3.1, 14, 36);
+        createLineBurst(decoy.x, decoy.y, PALETTE.ufoLarge, 14, 0.9, 3.1, 14, 36);
     }
 
     asteroids = [];
@@ -3893,7 +3894,7 @@ function bounceUfoOffAsteroid(ufo, asteroid) {
     createLineBurst(
         ufo.x,
         ufo.y,
-        ufo.type === "small" ? PALETTE.enemyShot : PALETTE.ship,
+        ufo.type === "small" ? PALETTE.enemyShot : PALETTE.ufoLarge,
         8,
         0.5,
         1.6,
@@ -4366,7 +4367,7 @@ function removeUfo(index, exploded = false) {
     stopLoop(ufo.soundKey);
 
     if (exploded) {
-        createLineBurst(ufo.x, ufo.y, ufo.type === "small" ? PALETTE.enemyShot : PALETTE.ship, 20, 1.4, 4.2, 20, 56);
+        createLineBurst(ufo.x, ufo.y, ufo.type === "small" ? PALETTE.enemyShot : PALETTE.ufoLarge, 20, 1.4, 4.2, 20, 56);
         playEffect("asteroidHit");
         const awardedPoints = registerKillScore(ufo.scoreValue);
         showBonusAward(
@@ -4374,7 +4375,7 @@ function removeUfo(index, exploded = false) {
             ufo.type === "small" ? "SMALL BOSS BONUS" : "LARGE BOSS BONUS"
         );
         addScreenShake(ufo.type === "small" ? 12 : 8, ufo.type === "small" ? 20 : 12);
-        triggerFlash(ufo.type === "small" ? PALETTE.enemyShot : PALETTE.ship, ufo.type === "small" ? 0.2 : 0.1);
+        triggerFlash(ufo.type === "small" ? PALETTE.enemyShot : PALETTE.ufoLarge, ufo.type === "small" ? 0.2 : 0.1);
     }
 }
 
@@ -4663,7 +4664,7 @@ function updateThreatBomb(dt) {
     }
 
     if (!threatBomb) {
-        if (wave < 3) {
+        if (wave < 6) {
             return;
         }
         nextThreatBombTimer -= dt;
@@ -4760,7 +4761,7 @@ function updateMineralField(dt) {
     }
 
     if (!mineralField) {
-        if (wave < 3) {
+        if (wave < 6) {
             return;
         }
         nextMineralFieldTimer -= dt;
@@ -5585,7 +5586,7 @@ function drawUfos() {
             const height = ufo.type === "small" ? ufo.radius * 1.55 : ufo.radius * 1.75;
             ctx.drawImage(ufo.image, -width / 2, -height / 2, width, height);
         } else {
-            ctx.strokeStyle = ufo.type === "small" ? PALETTE.enemyShot : PALETTE.ship;
+            ctx.strokeStyle = ufo.type === "small" ? PALETTE.enemyShot : PALETTE.ufoLarge;
             ctx.lineWidth = ufo.type === "small" ? 2 : 2.4;
 
             if (ufo.type === "small") {
@@ -5642,9 +5643,9 @@ function drawUfos() {
 function drawDecoys() {
     for (const decoy of decoys) {
         ctx.save();
-        ctx.strokeStyle = PALETTE.ship;
+        ctx.strokeStyle = PALETTE.ufoLarge;
         ctx.lineWidth = 2;
-        ctx.shadowColor = PALETTE.ship;
+        ctx.shadowColor = PALETTE.ufoLarge;
         ctx.shadowBlur = 10;
         drawShipOutline(decoy.x, decoy.y, decoy.angle, decoy.modelScale);
         ctx.restore();
@@ -6169,7 +6170,7 @@ function drawLegendUfoIcon(x, y, type) {
     }
 
     ctx.save();
-    ctx.strokeStyle = isSmall ? PALETTE.enemyShot : PALETTE.ship;
+    ctx.strokeStyle = isSmall ? PALETTE.enemyShot : PALETTE.ufoLarge;
     ctx.lineWidth = 1.4;
     ctx.beginPath();
     ctx.ellipse(x, y + 1, isSmall ? 10 : 12, isSmall ? 5 : 6, 0, 0, Math.PI * 2);

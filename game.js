@@ -37,7 +37,7 @@ const milkyWayPhoto = new Image();
 const asteroidSurfacePhotos = [];
 
 const HUD_FONT = "'Press Start 2P', monospace";
-const GAME_VERSION = "1.071";
+const GAME_VERSION = "1.074";
 const ABOUT_CREDIT_TEXT = `Classic Asteroids HTML5 by Tom Wellborn 2026 v${GAME_VERSION}`;
 const ABOUT_CODEBASE_URL = "https://github.com/tommiew007/Asteroids";
 const ABOUT_WIKI_URL = "https://github.com/tommiew007/Asteroids/wiki";
@@ -118,7 +118,7 @@ const TITAN_SPEED_STEP = 0.035;
 const TITAN_SPEED_MAX = 0.9;
 const TITAN_RADIUS_RATIO = 0.187;
 const TITAN_GRAVITY_RANGE_MULTIPLIER = 15;
-const TITAN_GRAVITY_INTENSITY_SCALE = 0.58;
+const TITAN_GRAVITY_INTENSITY_SCALE = 0.72;
 const TITAN_ALERT_FRAMES = 210;
 const TITAN_BOSS_SCORE_VALUE = 500;
 const TITAN_CHILD_CLEAR_BONUS = 500;
@@ -2581,13 +2581,22 @@ function getAsteroidSurfaceTexture(index) {
 }
 
 function buildLargeAsteroidTexture(asteroid) {
+    const isTitanAsteroid = asteroid.isTitan === true;
     const isLargeAsteroid = asteroid.sizeIndex === 0;
-    const minTextureSize = isLargeAsteroid
-        ? LARGE_ASTEROID_TEXTURE_MIN_SIZE
-        : Math.max(40, Math.round(asteroid.radius * 1.9));
-    const maxTextureSize = isLargeAsteroid
-        ? LARGE_ASTEROID_TEXTURE_MAX_SIZE
-        : Math.max(92, Math.round(asteroid.radius * 2.5));
+    const minTextureSize = isTitanAsteroid
+        ? Math.max(220, Math.round(asteroid.radius * 2.2))
+        : (
+            isLargeAsteroid
+                ? LARGE_ASTEROID_TEXTURE_MIN_SIZE
+                : Math.max(40, Math.round(asteroid.radius * 1.9))
+        );
+    const maxTextureSize = isTitanAsteroid
+        ? Math.max(minTextureSize, Math.min(1024, Math.round(asteroid.radius * 2.7)))
+        : (
+            isLargeAsteroid
+                ? LARGE_ASTEROID_TEXTURE_MAX_SIZE
+                : Math.max(92, Math.round(asteroid.radius * 2.5))
+        );
     const textureSize = Math.max(
         minTextureSize,
         Math.min(maxTextureSize, Math.round(asteroid.radius * 2.55))
@@ -3663,7 +3672,7 @@ function bounceUfoOffAsteroid(ufo, asteroid) {
 }
 
 function applyLargeAsteroidGravity(dt) {
-    if (!ship.active || wave <= 1) {
+    if (!ship.active) {
         return;
     }
 
@@ -5165,11 +5174,10 @@ function drawAsteroids() {
                 ctx.stroke();
             }
 
-            ctx.globalAlpha = pulse;
-            ctx.strokeStyle = "rgba(255, 236, 210, 0.85)";
-            ctx.lineWidth = 2.3;
-            ctx.beginPath();
-            ctx.arc(0, 0, asteroid.radius * 0.44, 0, Math.PI * 2);
+            ctx.globalAlpha = 0.12 + pulse * 0.2;
+            ctx.strokeStyle = "rgba(255, 236, 210, 0.82)";
+            ctx.lineWidth = 2.2;
+            traceAsteroidPath(ctx, asteroid.points);
             ctx.stroke();
             ctx.globalAlpha = 1;
             ctx.restore();

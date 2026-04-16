@@ -38,7 +38,7 @@ const titanPhoto = new Image();
 const asteroidSurfacePhotos = [];
 
 const HUD_FONT = "'Press Start 2P', monospace";
-const GAME_VERSION = "1.075";
+const GAME_VERSION = "1.076";
 const ABOUT_CREDIT_TEXT = `Classic Asteroids HTML5 by Tom Wellborn 2026 v${GAME_VERSION}`;
 const ABOUT_CODEBASE_URL = "https://github.com/tommiew007/Asteroids";
 const ABOUT_WIKI_URL = "https://github.com/tommiew007/Asteroids/wiki";
@@ -119,7 +119,7 @@ const TITAN_SPEED_STEP = 0.035;
 const TITAN_SPEED_MAX = 0.9;
 const TITAN_RADIUS_RATIO = 0.187;
 const TITAN_GRAVITY_RANGE_MULTIPLIER = 15;
-const TITAN_GRAVITY_INTENSITY_SCALE = 0.72;
+const TITAN_GRAVITY_INTENSITY_SCALE = 0.4;
 const TITAN_ALERT_FRAMES = 210;
 const TITAN_BOSS_SCORE_VALUE = 500;
 const TITAN_CHILD_CLEAR_BONUS = 500;
@@ -393,36 +393,74 @@ function buildBlackToTransparentTrimmedCanvas(image) {
     sourceCtx.drawImage(image, 0, 0);
     const imageData = sourceCtx.getImageData(0, 0, sourceCanvas.width, sourceCanvas.height);
     const { data, width, height } = imageData;
-    const blackThreshold = 26;
-    const featherRange = 42;
     const visibleAlphaThreshold = 6;
+    const backgroundThreshold = 34;
+    const neutralSpreadThreshold = 26;
+    const pixelCount = width * height;
+    const backgroundMask = new Uint8Array(pixelCount);
+    const queue = new Uint32Array(pixelCount);
+    let head = 0;
+    let tail = 0;
+
+    const isBackgroundLike = (pixelIndex) => {
+        const offset = pixelIndex * 4;
+        const red = data[offset];
+        const green = data[offset + 1];
+        const blue = data[offset + 2];
+        const maxChannel = Math.max(red, green, blue);
+        const minChannel = Math.min(red, green, blue);
+        return maxChannel <= backgroundThreshold && (maxChannel - minChannel) <= neutralSpreadThreshold;
+    };
+
+    const tryEnqueue = (x, y) => {
+        if (x < 0 || y < 0 || x >= width || y >= height) {
+            return;
+        }
+        const pixelIndex = y * width + x;
+        if (backgroundMask[pixelIndex] === 1 || !isBackgroundLike(pixelIndex)) {
+            return;
+        }
+        backgroundMask[pixelIndex] = 1;
+        queue[tail] = pixelIndex;
+        tail += 1;
+    };
+
+    for (let x = 0; x < width; x += 1) {
+        tryEnqueue(x, 0);
+        tryEnqueue(x, height - 1);
+    }
+    for (let y = 0; y < height; y += 1) {
+        tryEnqueue(0, y);
+        tryEnqueue(width - 1, y);
+    }
+
+    while (head < tail) {
+        const pixelIndex = queue[head];
+        head += 1;
+        const x = pixelIndex % width;
+        const y = Math.floor(pixelIndex / width);
+        tryEnqueue(x + 1, y);
+        tryEnqueue(x - 1, y);
+        tryEnqueue(x, y + 1);
+        tryEnqueue(x, y - 1);
+    }
 
     let minX = width;
     let minY = height;
     let maxX = -1;
     let maxY = -1;
 
-    for (let index = 0; index < data.length; index += 4) {
-        const red = data[index];
-        const green = data[index + 1];
-        const blue = data[index + 2];
-        const maxChannel = Math.max(red, green, blue);
-
-        if (maxChannel <= blackThreshold) {
-            data[index + 3] = 0;
+    for (let pixelIndex = 0; pixelIndex < pixelCount; pixelIndex += 1) {
+        const offset = pixelIndex * 4;
+        if (backgroundMask[pixelIndex] === 1) {
+            data[offset + 3] = 0;
             continue;
         }
 
-        if (maxChannel < blackThreshold + featherRange) {
-            const fade = (maxChannel - blackThreshold) / featherRange;
-            data[index + 3] = Math.round(data[index + 3] * fade);
-        }
-
-        if (data[index + 3] <= visibleAlphaThreshold) {
+        if (data[offset + 3] <= visibleAlphaThreshold) {
             continue;
         }
 
-        const pixelIndex = index / 4;
         const x = pixelIndex % width;
         const y = Math.floor(pixelIndex / width);
         if (x < minX) {
@@ -444,8 +482,13 @@ function buildBlackToTransparentTrimmedCanvas(image) {
         return null;
     }
 
-    const trimmedWidth = Math.max(1, maxX - minX + 1);
-    const trimmedHeight = Math.max(1, maxY - minY + 1);
+    const padding = 1;
+    const trimmedMinX = Math.max(0, minX - padding);
+    const trimmedMinY = Math.max(0, minY - padding);
+    const trimmedMaxX = Math.min(width - 1, maxX + padding);
+    const trimmedMaxY = Math.min(height - 1, maxY + padding);
+    const trimmedWidth = Math.max(1, trimmedMaxX - trimmedMinX + 1);
+    const trimmedHeight = Math.max(1, trimmedMaxY - trimmedMinY + 1);
     const trimmedCanvas = document.createElement("canvas");
     trimmedCanvas.width = trimmedWidth;
     trimmedCanvas.height = trimmedHeight;
@@ -456,8 +499,8 @@ function buildBlackToTransparentTrimmedCanvas(image) {
 
     trimmedCtx.drawImage(
         sourceCanvas,
-        minX,
-        minY,
+        trimmedMinX,
+        trimmedMinY,
         trimmedWidth,
         trimmedHeight,
         0,
@@ -5265,11 +5308,11 @@ function drawAsteroids() {
                 const drawWidth = titanPhotoMaskedCanvas.width * drawScale;
                 const drawHeight = titanPhotoMaskedCanvas.height * drawScale;
                 ctx.globalAlpha = 1;
-                ctx.shadowColor = "rgba(255, 190, 140, 0.46)";
-                ctx.shadowBlur = 12;
+                ctx.shadowColor = `rgba(255, 190, 140, ${(0.2 + pulse * 0.22).toFixed(3)})`;
+                ctx.shadowBlur = 7 + pulse * 8;
                 const previousSmoothing = ctx.imageSmoothingEnabled;
                 ctx.imageSmoothingEnabled = true;
-                ctx.filter = "brightness(1.12) contrast(1.1)";
+                ctx.filter = "brightness(1.04) contrast(1.05)";
                 ctx.drawImage(titanPhotoMaskedCanvas, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
                 ctx.filter = "none";
                 ctx.imageSmoothingEnabled = previousSmoothing;
@@ -5294,12 +5337,6 @@ function drawAsteroids() {
                     ctx.stroke();
                 }
             }
-
-            ctx.globalAlpha = 0.12 + pulse * 0.2;
-            ctx.strokeStyle = "rgba(255, 236, 210, 0.82)";
-            ctx.lineWidth = 2.2;
-            traceAsteroidPath(ctx, asteroid.points);
-            ctx.stroke();
             ctx.globalAlpha = 1;
             ctx.restore();
             continue;

@@ -38,7 +38,7 @@ const titanPhoto = new Image();
 const asteroidSurfacePhotos = [];
 
 const HUD_FONT = "'Press Start 2P', monospace";
-const GAME_VERSION = "1.101";
+const GAME_VERSION = "1.102";
 const ABOUT_CREDIT_TEXT = `Classic Asteroids HTML5 by Tom Wellborn 2026 v${GAME_VERSION}`;
 const ABOUT_CODEBASE_URL = "https://github.com/tommiew007/Asteroids";
 const ABOUT_WIKI_URL = "https://github.com/tommiew007/Asteroids/wiki";
@@ -159,7 +159,7 @@ const ASTEROID_OVERLAP_IMPACT_CHANCE = 0.1;
 const ROGUE_ASTEROID_CHANCE = 0.05;
 const ROGUE_ASTEROID_SPEED_MULTIPLIER = 4;
 const ROGUE_ASTEROID_SCORE_BONUS = 500;
-const NON_ROGUE_ASTEROID_MAX_SPEED_MULTIPLIER = 3;
+const NON_ROGUE_ASTEROID_MAX_SPEED_MULTIPLIER = 2;
 const ANTI_GRAVITY_FIELD_RANGE = 180;
 const ANTI_GRAVITY_MIN_GAP = 12;
 const ANTI_GRAVITY_PUSH_FORCE = 0.55;

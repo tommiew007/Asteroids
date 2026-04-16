@@ -46,7 +46,7 @@ const ABOUT_MILKY_WAY_URL = "https://commons.wikimedia.org/wiki/File:ESO_-_Milky
 const STORAGE_KEY = "asteroids-high-score";
 const AUDIO_SETTINGS_KEY = "asteroids-audio-settings";
 const HUD_SCORE_DIGITS = 8;
-const MINI_ASTEROID_RADIUS_FACTOR = 1 / 3;
+const MINI_ASTEROID_RADIUS_FACTOR = 1 / 2;
 const ASTEROID_RADII = [48, 28, 16, 16 * MINI_ASTEROID_RADIUS_FACTOR];
 const DESKTOP_ASTEROID_RADIUS_MULTIPLIER = 1.1;
 const ASTEROID_SCORES = [20, 50, 100, 100];
@@ -2738,19 +2738,28 @@ function getAsteroidSurfaceTexture(index) {
 function buildLargeAsteroidTexture(asteroid) {
     const isTitanAsteroid = asteroid.isTitan === true;
     const isLargeAsteroid = asteroid.sizeIndex === 0;
+    const isMiniAsteroid = asteroid.isMini === true || asteroid.sizeIndex >= ASTEROID_RADII.length - 1;
     const minTextureSize = isTitanAsteroid
         ? Math.max(220, Math.round(asteroid.radius * 2.2))
         : (
             isLargeAsteroid
                 ? LARGE_ASTEROID_TEXTURE_MIN_SIZE
-                : Math.max(40, Math.round(asteroid.radius * 1.9))
+                : (
+                    isMiniAsteroid
+                        ? Math.max(16, Math.round(asteroid.radius * 1.9))
+                        : Math.max(40, Math.round(asteroid.radius * 1.9))
+                )
         );
     const maxTextureSize = isTitanAsteroid
         ? Math.max(minTextureSize, Math.min(1024, Math.round(asteroid.radius * 2.7)))
         : (
             isLargeAsteroid
                 ? LARGE_ASTEROID_TEXTURE_MAX_SIZE
-                : Math.max(92, Math.round(asteroid.radius * 2.5))
+                : (
+                    isMiniAsteroid
+                        ? Math.max(minTextureSize, Math.round(asteroid.radius * 2.5))
+                        : Math.max(92, Math.round(asteroid.radius * 2.5))
+                )
         );
     const textureSize = Math.max(
         minTextureSize,

@@ -38,7 +38,7 @@ const titanPhoto = new Image();
 const asteroidSurfacePhotos = [];
 
 const HUD_FONT = "'Press Start 2P', monospace";
-const GAME_VERSION = "1.077";
+const GAME_VERSION = "1.080";
 const ABOUT_CREDIT_TEXT = `Classic Asteroids HTML5 by Tom Wellborn 2026 v${GAME_VERSION}`;
 const ABOUT_CODEBASE_URL = "https://github.com/tommiew007/Asteroids";
 const ABOUT_WIKI_URL = "https://github.com/tommiew007/Asteroids/wiki";
@@ -108,9 +108,10 @@ const TITAN_WAVE_INTERVAL = 5;
 const TITAN_BASE_GRAVITY = 0.008;
 const TITAN_GRAVITY_STEP = 0.008;
 const TITAN_GRAVITY_MAX = 0.16;
-const TITAN_BASE_FRAGMENT_COUNT = 8;
+const TITAN_BASE_FRAGMENT_COUNT = 4;
 const TITAN_FRAGMENT_STEP = 1;
-const TITAN_FRAGMENT_MAX = 16;
+const TITAN_FRAGMENT_MAX = 10;
+const TITAN_FRAGMENT_OVERLAP_IMMUNITY_FRAMES = 120;
 const TITAN_BASE_SHOTS_TO_BREAK = 20;
 const TITAN_SHOTS_TO_BREAK_STEP = 2;
 const TITAN_SHOTS_TO_BREAK_MAX = 50;
@@ -137,7 +138,7 @@ const MINERAL_FIELD_SPEED_CAP = 3.8;
 const MINERAL_PARTICLE_SIZE = 5;
 const MINERAL_TOUCH_SCORE = 10;
 const LARGE_ASTEROID_VISUALS_ENABLED = true;
-const LARGE_ASTEROID_VISUALS_ON_MOBILE = false;
+const LARGE_ASTEROID_VISUALS_ON_MOBILE = true;
 const LARGE_ASTEROID_SHADER_DEBUG_MODE = false;
 const LARGE_ASTEROID_TEXTURE_MIN_SIZE = 96;
 const LARGE_ASTEROID_TEXTURE_MAX_SIZE = 196;
@@ -394,8 +395,8 @@ function buildBlackToTransparentTrimmedCanvas(image) {
     const imageData = sourceCtx.getImageData(0, 0, sourceCanvas.width, sourceCanvas.height);
     const { data, width, height } = imageData;
     const visibleAlphaThreshold = 6;
-    const backgroundThreshold = 34;
-    const neutralSpreadThreshold = 26;
+    const backgroundThreshold = 18;
+    const neutralSpreadThreshold = 20;
     const pixelCount = width * height;
     const backgroundMask = new Uint8Array(pixelCount);
     const queue = new Uint32Array(pixelCount);
@@ -479,7 +480,9 @@ function buildBlackToTransparentTrimmedCanvas(image) {
 
     sourceCtx.putImageData(imageData, 0, 0);
     if (maxX < minX || maxY < minY) {
-        return null;
+        // If keying logic fails to detect a foreground region, fall back to
+        // the original image canvas so Titan still renders as provided.
+        return sourceCanvas;
     }
 
     const padding = 1;
@@ -523,8 +526,9 @@ milkyWayPhoto.addEventListener("error", () => {
 setSafeImageSource(milkyWayPhoto, "assets/milky-way.jpg", "milky way");
 titanPhoto.decoding = "async";
 titanPhoto.addEventListener("load", () => {
-    titanPhotoMaskedCanvas = buildBlackToTransparentTrimmedCanvas(titanPhoto);
-    titanPhotoReady = Boolean(titanPhotoMaskedCanvas);
+    const masked = buildBlackToTransparentTrimmedCanvas(titanPhoto);
+    titanPhotoMaskedCanvas = masked || titanPhoto;
+    titanPhotoReady = true;
 });
 titanPhoto.addEventListener("error", () => {
     titanPhotoReady = false;
@@ -2971,6 +2975,9 @@ function createAsteroid(sizeIndex = 0, x, y, angle, inheritedSpeed, options = {}
         maxSpeed,
         durability: options.durability ?? (elite ? 2 : 1),
         scoreBonus: options.scoreBonus ?? (elite ? 40 + sizeIndex * 20 : 0),
+        overlapImpactImmuneFrames: Number.isFinite(options.overlapImpactImmuneFrames)
+            ? Math.max(0, options.overlapImpactImmuneFrames)
+            : 0,
         titanChildBatchId: options.titanChildBatchId ?? null
     };
 }
@@ -3573,6 +3580,10 @@ function handleAsteroidOverlapImpacts() {
                 continue;
             }
 
+            if (firstAsteroid.overlapImpactImmuneFrames > 0 || secondAsteroid.overlapImpactImmuneFrames > 0) {
+                continue;
+            }
+
             if (!circlesOverlap(firstAsteroid, secondAsteroid)) {
                 continue;
             }
@@ -3844,9 +3855,10 @@ function applyLargeAsteroidGravity(dt) {
             continue;
         }
 
-        // Use the shortest wrapped vector so gravity still feels correct at the screen edges.
-        const dx = getWrappedAxisDelta(ship.x, asteroid.x, canvas.width);
-        const dy = getWrappedAxisDelta(ship.y, asteroid.y, canvas.height);
+        // Gravity is constrained to visible screen space and does not "reach"
+        // across wrapped borders.
+        const dx = asteroid.x - ship.x;
+        const dy = asteroid.y - ship.y;
         const distance = Math.hypot(dx, dy);
         const gravityRange = asteroid.radius * (
             asteroid.isTitan
@@ -4149,15 +4161,22 @@ function destroyAsteroid(index, shotAngle, awardPoints = true) {
         );
         const titanChildBatchId = ++titanChildBatchSerial;
         activeTitanChildBatchIds.add(titanChildBatchId);
+        const fragmentRadius = ASTEROID_RADII[0] * gameplayProfile.entityScale * getAsteroidRadiusMultiplier();
+        const minOrbitRadiusForSpacing = (fragmentRadius * 1.18) / Math.max(0.22, Math.sin(Math.PI / fragmentCount));
+        const fragmentSpawnRadius = Math.max(fragmentRadius * 1.7, asteroid.radius * 0.62, minOrbitRadiusForSpacing);
 
         for (let fragmentIndex = 0; fragmentIndex < fragmentCount; fragmentIndex += 1) {
             const orbitRatio = fragmentIndex / fragmentCount;
-            const fragmentAngle = orbitRatio * Math.PI * 2 + randomBetween(-0.28, 0.28);
-            const fragmentSpeed = baseSplitSpeed * randomBetween(0.85, 1.3);
+            const spawnAngle = orbitRatio * Math.PI * 2 + randomBetween(-0.08, 0.08);
+            const spawnX = asteroid.x + Math.cos(spawnAngle) * fragmentSpawnRadius;
+            const spawnY = asteroid.y + Math.sin(spawnAngle) * fragmentSpawnRadius;
+            const fragmentAngle = spawnAngle + randomBetween(-0.11, 0.11);
+            const fragmentSpeed = baseSplitSpeed * randomBetween(0.92, 1.14);
             asteroids.push(
-                createAsteroid(0, asteroid.x, asteroid.y, fragmentAngle, fragmentSpeed, {
+                createAsteroid(0, spawnX, spawnY, fragmentAngle, fragmentSpeed, {
                     colorway: asteroid.colorway,
                     surfaceTextureIndex: asteroid.surfaceTextureIndex,
+                    overlapImpactImmuneFrames: TITAN_FRAGMENT_OVERLAP_IMMUNITY_FRAMES,
                     titanChildBatchId
                 })
             );
@@ -4425,6 +4444,10 @@ function updateAsteroids(dt) {
                     asteroid.vy = (asteroid.vy / speed) * maxSpeed;
                 }
             }
+        }
+
+        if (asteroid.overlapImpactImmuneFrames > 0) {
+            asteroid.overlapImpactImmuneFrames = Math.max(0, asteroid.overlapImpactImmuneFrames - dt);
         }
 
         asteroid.x += asteroid.vx * dt;

@@ -38,7 +38,7 @@ const titanPhoto = new Image();
 const asteroidSurfacePhotos = [];
 
 const HUD_FONT = "'Press Start 2P', monospace";
-const GAME_VERSION = "1.102";
+const GAME_VERSION = "1.103";
 const ABOUT_CREDIT_TEXT = `Classic Asteroids HTML5 by Tom Wellborn 2026 v${GAME_VERSION}`;
 const ABOUT_CODEBASE_URL = "https://github.com/tommiew007/Asteroids";
 const ABOUT_WIKI_URL = "https://github.com/tommiew007/Asteroids/wiki";
@@ -46,9 +46,10 @@ const ABOUT_MILKY_WAY_URL = "https://commons.wikimedia.org/wiki/File:ESO_-_Milky
 const STORAGE_KEY = "asteroids-high-score";
 const AUDIO_SETTINGS_KEY = "asteroids-audio-settings";
 const HUD_SCORE_DIGITS = 8;
-const ASTEROID_RADII = [48, 28, 16];
+const MINI_ASTEROID_RADIUS_FACTOR = 1 / 3;
+const ASTEROID_RADII = [48, 28, 16, 16 * MINI_ASTEROID_RADIUS_FACTOR];
 const DESKTOP_ASTEROID_RADIUS_MULTIPLIER = 1.1;
-const ASTEROID_SCORES = [20, 50, 100];
+const ASTEROID_SCORES = [20, 50, 100, 100];
 const MAX_STARTING_ASTEROIDS = 11;
 const MAX_PLAYER_SHOTS = 4;
 const MAX_ENEMY_SHOTS = 20;
@@ -156,6 +157,9 @@ const PLAYER_SHOT_DISTANCE_MULTIPLIER = 2;
 const PLAYER_HOMING_TURN_RATE = 0.055;
 const PLAYER_HOMING_SHOT_SPEED_MULTIPLIER = 0.9;
 const ASTEROID_OVERLAP_IMPACT_CHANCE = 0.1;
+const MINI_ASTEROID_SPAWN_CHANCE = 0.05;
+const MINI_ASTEROID_SPAWN_COUNT = 6;
+const MINI_ASTEROID_OVERLAP_IMMUNITY_FRAMES = 75;
 const ROGUE_ASTEROID_CHANCE = 0.05;
 const ROGUE_ASTEROID_SPEED_MULTIPLIER = 4;
 const ROGUE_ASTEROID_SCORE_BONUS = 500;
@@ -2716,7 +2720,7 @@ function getAsteroidTextureCollectionStyle(sizeIndex) {
     if (Number.isFinite(sizeIndex) && sizeIndex >= 0 && sizeIndex < ASTEROID_TEXTURE_COLLECTION_BY_SIZE.length) {
         return ASTEROID_TEXTURE_COLLECTION_BY_SIZE[sizeIndex];
     }
-    return ASTEROID_TEXTURE_COLLECTION_BY_SIZE[0];
+    return ASTEROID_TEXTURE_COLLECTION_BY_SIZE[ASTEROID_TEXTURE_COLLECTION_BY_SIZE.length - 1];
 }
 
 function getAsteroidSurfaceTexture(index) {
@@ -2935,17 +2939,20 @@ function getDefaultAsteroidSpawnSpeedCeiling(sizeIndex = 0) {
 }
 
 function createAsteroid(sizeIndex = 0, x, y, angle, inheritedSpeed, options = {}) {
-    const radius = ASTEROID_RADII[sizeIndex] * gameplayProfile.entityScale * getAsteroidRadiusMultiplier();
+    const normalizedSizeIndex = Number.isFinite(sizeIndex)
+        ? Math.max(0, Math.min(ASTEROID_RADII.length - 1, Math.floor(sizeIndex)))
+        : 0;
+    const radius = ASTEROID_RADII[normalizedSizeIndex] * gameplayProfile.entityScale * getAsteroidRadiusMultiplier();
     const position = Number.isFinite(x) && Number.isFinite(y)
         ? { x, y }
         : generateOffscreenPosition(radius);
     const direction = typeof angle === "number" ? angle : Math.random() * Math.PI * 2;
     const speed = typeof inheritedSpeed === "number"
         ? inheritedSpeed
-        : randomBetween(1.2 + sizeIndex * 0.25, 1.9 + sizeIndex * 0.35) * gameplayProfile.movementScale;
+        : randomBetween(1.2 + normalizedSizeIndex * 0.25, 1.9 + normalizedSizeIndex * 0.35) * gameplayProfile.movementScale;
     const baseSpeed = Number.isFinite(options.baseSpeed) ? options.baseSpeed : Math.max(0.01, Math.abs(speed));
     const isRogue = Boolean(options.rogue);
-    const nonRogueSpeedCeiling = getDefaultAsteroidSpawnSpeedCeiling(sizeIndex) * NON_ROGUE_ASTEROID_MAX_SPEED_MULTIPLIER;
+    const nonRogueSpeedCeiling = getDefaultAsteroidSpawnSpeedCeiling(normalizedSizeIndex) * NON_ROGUE_ASTEROID_MAX_SPEED_MULTIPLIER;
     const requestedMaxSpeed = Number.isFinite(options.maxSpeed)
         ? Math.max(0, options.maxSpeed)
         : nonRogueSpeedCeiling;
@@ -2954,6 +2961,7 @@ function createAsteroid(sizeIndex = 0, x, y, angle, inheritedSpeed, options = {}
         ? Math.sign(speed) * maxSpeed
         : speed;
     const elite = Boolean(options.elite);
+    const isMini = Boolean(options.isMini) || normalizedSizeIndex >= ASTEROID_RADII.length - 1;
     const colorway = options.colorway || pickRandomAsteroidColorway();
     const surfaceTextureIndex = Number.isFinite(options.surfaceTextureIndex)
         ? Math.max(0, Math.min(asteroidSurfacePhotos.length - 1, Math.floor(options.surfaceTextureIndex)))
@@ -2966,7 +2974,7 @@ function createAsteroid(sizeIndex = 0, x, y, angle, inheritedSpeed, options = {}
         vx: Math.cos(direction) * initialSpeed,
         vy: Math.sin(direction) * initialSpeed,
         radius,
-        sizeIndex,
+        sizeIndex: normalizedSizeIndex,
         angle: Math.random() * Math.PI * 2,
         rotation: randomBetween(-0.03, 0.03),
         points: generateAsteroidShape(radius),
@@ -2980,6 +2988,7 @@ function createAsteroid(sizeIndex = 0, x, y, angle, inheritedSpeed, options = {}
         largeVisualTextureSize: 0,
         largeVisualTextureDirty: true,
         elite,
+        isMini,
         rogue: isRogue,
         baseSpeed,
         maxSpeed,
@@ -3383,6 +3392,52 @@ function spawnDebugRogueAsteroid() {
         scoreBonus: ROGUE_ASTEROID_SCORE_BONUS
     }));
     showBossAlert("TEST ROGUE ASTEROID", 120);
+}
+
+function spawnMiniAsteroidCluster(x, y, baseAngle, inheritedSpeed, options = {}) {
+    const spawnCount = Math.max(1, Math.floor(options.count ?? MINI_ASTEROID_SPAWN_COUNT));
+    const startAngle = Number.isFinite(baseAngle) ? baseAngle : Math.random() * Math.PI * 2;
+    const baseSpeed = Number.isFinite(inheritedSpeed)
+        ? Math.max(0.2, inheritedSpeed)
+        : randomBetween(2.4, 3.3) * gameplayProfile.movementScale;
+    const sourceColorway = options.colorway || pickRandomAsteroidColorway();
+    const sourceTextureIndex = Number.isFinite(options.surfaceTextureIndex)
+        ? options.surfaceTextureIndex
+        : Math.floor(Math.random() * asteroidSurfacePhotos.length);
+    const sourceBatchId = options.titanChildBatchId ?? null;
+
+    for (let miniIndex = 0; miniIndex < spawnCount; miniIndex += 1) {
+        const spreadAngle = startAngle + (Math.PI * 2 * miniIndex) / spawnCount + randomBetween(-0.3, 0.3);
+        const miniSpeed = baseSpeed * randomBetween(0.84, 1.2);
+        asteroids.push(
+            createAsteroid(ASTEROID_RADII.length - 1, x, y, spreadAngle, miniSpeed, {
+                isMini: true,
+                colorway: sourceColorway,
+                surfaceTextureIndex: sourceTextureIndex,
+                overlapImpactImmuneFrames: MINI_ASTEROID_OVERLAP_IMMUNITY_FRAMES,
+                titanChildBatchId: sourceBatchId
+            })
+        );
+    }
+}
+
+function spawnDebugMiniAsteroids() {
+    if (!godModeEnabled || gameState === "about" || gameState === "help" || gameState === "godHelp" || gameState === "upgrade") {
+        return;
+    }
+
+    if (gameState === "waiting" || gameState === "gameOver") {
+        startGame();
+    }
+
+    if (gameState !== "playing" && gameState !== "paused") {
+        return;
+    }
+
+    const originX = canvas.width * 0.5;
+    const originY = canvas.height * 0.4;
+    spawnMiniAsteroidCluster(originX, originY, Math.random() * Math.PI * 2, randomBetween(2.2, 3.1) * gameplayProfile.movementScale);
+    showBossAlert("TEST MINI ASTEROIDS", 120);
 }
 
 function spawnDebugTitanWave() {
@@ -4225,7 +4280,15 @@ function destroyAsteroid(index, shotAngle, awardPoints = true) {
     addScreenShake(asteroid.elite ? 11 : 6, asteroid.elite ? 16 : 8);
     triggerFlash(asteroid.strokeColor, asteroid.elite ? 0.18 : 0.08);
 
-    if (asteroid.sizeIndex < ASTEROID_RADII.length - 1) {
+    const standardSplitMaxSizeIndex = ASTEROID_RADII.length - 2;
+    const canSplitToNextStandardSize = asteroid.sizeIndex < standardSplitMaxSizeIndex;
+    const shouldSpawnMiniCluster = (
+        asteroid.sizeIndex === standardSplitMaxSizeIndex
+        && !asteroid.isMini
+        && Math.random() < MINI_ASTEROID_SPAWN_CHANCE
+    );
+
+    if (canSplitToNextStandardSize) {
         const nextSize = asteroid.sizeIndex + 1;
         const surgeSplitSpeedMultiplier = surgeActive ? THREAT_SURGE_ASTEROID_SPLIT_SPEED_MULTIPLIER : 1;
         const inheritedSpeed = (
@@ -4261,6 +4324,25 @@ function destroyAsteroid(index, shotAngle, awardPoints = true) {
             );
             childIndex += 1;
         }
+    } else if (shouldSpawnMiniCluster) {
+        const miniInheritedSpeed = (
+            Math.hypot(asteroid.vx, asteroid.vy) + 0.55 * gameplayProfile.movementScale
+        ) * (surgeActive ? THREAT_SURGE_ASTEROID_SPLIT_SPEED_MULTIPLIER : 1);
+        const miniBaseAngle = Number.isFinite(shotAngle)
+            ? shotAngle
+            : Math.atan2(asteroid.vy, asteroid.vx);
+        spawnMiniAsteroidCluster(
+            asteroid.x,
+            asteroid.y,
+            miniBaseAngle,
+            miniInheritedSpeed,
+            {
+                colorway: asteroid.colorway,
+                surfaceTextureIndex: asteroid.surfaceTextureIndex,
+                titanChildBatchId: destroyedTitanChildBatchId
+            }
+        );
+        showBossAlert("MINI ASTEROID CLUSTER", 70);
     }
 
     maybeFinalizeTitanChildBatch(destroyedTitanChildBatchId);
@@ -5999,6 +6081,7 @@ function getGodHelpScreenLines() {
         "5 SPAWN DECOY PAIR",
         "6 OR B SPAWN TITAN BOSS WAVE",
         "7 SPAWN ROGUE ASTEROID",
+        "8 SPAWN MINI ASTEROID CLUSTER",
         "U OPEN FULL POWER-UP DRAFT",
         "K CLEAR CURRENT WAVE",
         "L JUMP TO WAVE",
@@ -6183,7 +6266,7 @@ function drawHelpElementsLegend() {
         titleBottom
     );
     const baseLineHeight = canvas.width < 720 ? 21 : 25;
-    const entryCount = 11;
+    const entryCount = 12;
     const bottomPadding = canvas.width < 720 ? 20 : 28;
     const availableHeight = Math.max(80, canvas.height - bottomPadding - minimumStartY);
     const fitLineHeight = Math.floor(availableHeight / Math.max(1, entryCount - 1));
@@ -6205,9 +6288,10 @@ function drawHelpElementsLegend() {
         },
         { draw: () => drawLegendAsteroidIcon(iconX, startY + lineHeight * 6, ASTEROID_COLORWAYS[2].stroke), text: `= MED ASTEROID (${ASTEROID_SCORES[1]} PTS)` },
         { draw: () => drawLegendAsteroidIcon(iconX, startY + lineHeight * 7, ASTEROID_COLORWAYS[4].stroke), text: `= SMALL ASTEROID (${ASTEROID_SCORES[2]} PTS)` },
-        { draw: () => drawLegendAsteroidIcon(iconX, startY + lineHeight * 8, ROGUE_ASTEROID_COLORWAY.stroke), text: `= ROGUE ASTEROID (+${ROGUE_ASTEROID_SCORE_BONUS} BONUS)` },
-        { draw: () => drawLegendBombIcon(iconX, startY + lineHeight * 9), text: `= THREAT BOMB (SHOT FOR ${THREAT_BOMB_SCORE_VALUE} PTS)` },
-        { draw: () => drawLegendMineralIcon(iconX, startY + lineHeight * 10), text: `= MINERAL (+${MINERAL_TOUCH_SCORE} ON TOUCH)` }
+        { draw: () => drawLegendAsteroidIcon(iconX, startY + lineHeight * 8, ASTEROID_COLORWAYS[6].stroke), text: `= MINI ASTEROID (${ASTEROID_SCORES[3]} PTS)` },
+        { draw: () => drawLegendAsteroidIcon(iconX, startY + lineHeight * 9, ROGUE_ASTEROID_COLORWAY.stroke), text: `= ROGUE ASTEROID (+${ROGUE_ASTEROID_SCORE_BONUS} BONUS)` },
+        { draw: () => drawLegendBombIcon(iconX, startY + lineHeight * 10), text: `= THREAT BOMB (SHOT FOR ${THREAT_BOMB_SCORE_VALUE} PTS)` },
+        { draw: () => drawLegendMineralIcon(iconX, startY + lineHeight * 11), text: `= MINERAL (+${MINERAL_TOUCH_SCORE} ON TOUCH)` }
     ];
 
     ctx.save();
@@ -6426,6 +6510,7 @@ function handleKeyDown(event) {
     const isDebugDecoySpawn = event.code === "Digit5" || event.code === "Numpad5";
     const isDebugTitanSpawn = event.code === "Digit6" || event.code === "Numpad6" || event.code === "KeyB" || pressedKey === "b";
     const isDebugRogueSpawn = event.code === "Digit7" || event.code === "Numpad7";
+    const isDebugMiniSpawn = event.code === "Digit8" || event.code === "Numpad8";
     const isDebugUpgradeDraft = event.code === "KeyU" || pressedKey === "u";
     const isDebugWaveJump = event.code === "KeyL" || pressedKey === "l";
     const isDebugWaveClear = event.code === "KeyK" || pressedKey === "k";
@@ -6537,6 +6622,10 @@ function handleKeyDown(event) {
         }
         if (isDebugRogueSpawn) {
             spawnDebugRogueAsteroid();
+            return;
+        }
+        if (isDebugMiniSpawn) {
+            spawnDebugMiniAsteroids();
             return;
         }
         if (isDebugUpgradeDraft) {

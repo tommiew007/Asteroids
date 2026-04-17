@@ -1332,7 +1332,7 @@ function detonateThreatBomb() {
     }
 
     for (const decoy of decoys) {
-        createLineBurst(decoy.x, decoy.y, PALETTE.ufoLarge, 14, 0.9, 3.1, 14, 36);
+        createLineBurst(decoy.x, decoy.y, PALETTE.ship, 14, 0.9, 3.1, 14, 36);
     }
 
     asteroids = [];
@@ -3086,10 +3086,10 @@ function removeDecoy(index, exploded = true) {
         return;
     }
 
-    createLineBurst(decoy.x, decoy.y, PALETTE.ufoLarge, 14, 0.9, 3.1, 14, 36);
+    createLineBurst(decoy.x, decoy.y, PALETTE.ship, 14, 0.9, 3.1, 14, 36);
     playEffect("asteroidHit");
     addScreenShake(5, 7);
-    triggerFlash(PALETTE.ufoLarge, 0.08);
+    triggerFlash(PALETTE.ship, 0.08);
 }
 
 function chooseUfoType() {
@@ -3580,7 +3580,7 @@ function clearWaveInGodMode() {
     }
 
     for (const decoy of decoys) {
-        createLineBurst(decoy.x, decoy.y, PALETTE.ufoLarge, 14, 0.9, 3.1, 14, 36);
+        createLineBurst(decoy.x, decoy.y, PALETTE.ship, 14, 0.9, 3.1, 14, 36);
     }
 
     asteroids = [];
@@ -5643,9 +5643,9 @@ function drawUfos() {
 function drawDecoys() {
     for (const decoy of decoys) {
         ctx.save();
-        ctx.strokeStyle = PALETTE.ufoLarge;
+        ctx.strokeStyle = PALETTE.ship;
         ctx.lineWidth = 2;
-        ctx.shadowColor = PALETTE.ufoLarge;
+        ctx.shadowColor = PALETTE.ship;
         ctx.shadowBlur = 10;
         drawShipOutline(decoy.x, decoy.y, decoy.angle, decoy.modelScale);
         ctx.restore();
